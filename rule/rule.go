@@ -1,6 +1,9 @@
 package rule
 
 import (
+	"fmt"
+	"log"
+
 	"github.com/krilor/gossh/machine"
 	"github.com/pkg/errors"
 )
@@ -78,4 +81,47 @@ func (ma Meta) Ensure(m *machine.Machine, sudo bool) error {
 // NewMeta can be used to create a new Meta rule
 func NewMeta(check func(m *machine.Machine, sudo bool) (bool, error), ensure func(m *machine.Machine, sudo bool) error) Meta {
 	return Meta{check, ensure}
+}
+
+// Multi is a rule that consists of a list of rules
+//
+// Check will allways return false and nil and only serves as a building block for nested rules.
+type Multi []Rule
+
+// Check implements Checker
+// Check will allways return false and nil
+func (mi Multi) Check(m *machine.Machine, sudo bool) (bool, error) {
+	return false, nil
+}
+
+// Ensure implements Ensurer
+//
+// Ensure runs Check and Ensure on all rules in the list.
+//
+// Multi will stop executing and return an error if encountering an error from any Check or Ensure method.
+func (mi Multi) Ensure(m *machine.Machine, sudo bool) error {
+
+	for _, r := range mi {
+		log.Printf("Running rule %v", r)
+
+		ok, err := r.Check(m, false)
+		if err != nil {
+			return fmt.Errorf("could not check rule %v on machinve %v", r, m)
+		}
+
+		if ok {
+			log.Printf("Rule check %v was ok", r)
+			continue
+		}
+
+		log.Printf("Rule check %v was NOT ok", r)
+
+		err = r.Ensure(m, false)
+		if err != nil {
+			return fmt.Errorf("could not ensure rule %v on machine %v", r, m)
+		}
+
+	}
+
+	return nil
 }
