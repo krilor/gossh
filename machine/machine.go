@@ -14,6 +14,16 @@ import (
 	"golang.org/x/crypto/ssh/agent"
 )
 
+// Inventory is a list of Machines
+type Inventory []*Machine
+
+// Add adds m to i
+func (i *Inventory) Add(m *Machine) {
+	l := append(*i, m)
+	*i = l
+	return
+}
+
 // Machine is a remote machine one is trying to connect
 type Machine struct {
 	client   *ssh.Client
@@ -120,6 +130,40 @@ func (m Machine) Run(cmd string, sudo bool) (Response, error) {
 	log.Println(m.String(), runID, "exitstatus", r.ExitStatus)
 
 	return r, nil
+}
+
+// Apply applies Rule r on m, i.e. runs Check and conditionally runs Ensure
+// TODO - maybe use ... on r to allow specification of multiple rules at once
+func (m *Machine) Apply(r Rule) error {
+
+	ok, err := r.Check(m, false)
+	if err != nil {
+		return fmt.Errorf("could not check rule %v on machinve %v", r, m)
+	}
+
+	if ok {
+		log.Printf("Rule check %v was ok", r)
+		return nil
+	}
+
+	log.Printf("Rule check %v was NOT ok", r)
+
+	err = r.Ensure(m, false)
+	if err != nil {
+		return fmt.Errorf("could not ensure rule %v on machine %v", r, m)
+	}
+
+	return nil
+}
+
+// Check runs Checker c on m
+func (m *Machine) Check(c Checker) (bool, error) {
+	return c.Check(m, false)
+}
+
+// Ensure runs Ensurer e on m
+func (m *Machine) Ensure(c Ensurer) error {
+	return c.Ensure(m, false)
 }
 
 // Response contains the response from a remotely run cmd

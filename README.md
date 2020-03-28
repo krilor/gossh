@@ -8,7 +8,7 @@ The tool will probably be limited to configuring linux machines over SSH.
 
 ## Rules
 
-The basic building block of the declarative mindset baked into this experiment is the notion of a [Rule](rule/rule.go).
+The base building block of the declarative mindset baked into this experiment is the notion of a [Rule](rule/machine.go).
 A rule is an interface with two functions, _Check_ and _Ensure_, that does what it sounds like. _Check_ checks the state, _Ensure_ ensures the state.
 
 An example of such a rule is [apt.Package](apt/apt.go). _Check_ verifies if the apt package is installed or not, and _Ensure_ (un)installs the package. Both _Check_ and _Ensure_ are dependent on the declared PackageStatus (installed or not installed) and package name.
@@ -19,8 +19,8 @@ Implemented rules (just to show some ideas):
 
 * file.Exists - creates an empty file if it does not exists
 * apt.Package - install/uninstall apt packages
-* rule.Cmd - run shell commands as Check and Ensure. Check depends on the ExitStatus code.
-* rule.Meta - for constructing meta-rules on the fly. This is where imperative mode kicks in.
+* machine.Cmd - run shell commands as Check and Ensure. Check depends on the ExitStatus code.
+* machine.Meta - for constructing meta-rules on the fly. This is where imperative mode kicks in.
 
 ## Usage - give it a spin
 

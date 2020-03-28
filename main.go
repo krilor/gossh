@@ -2,45 +2,46 @@ package main
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/krilor/gossh/apt"
+	"github.com/krilor/gossh/base"
 	"github.com/krilor/gossh/file"
 	"github.com/krilor/gossh/machine"
-	"github.com/krilor/gossh/rule"
-	"github.com/krilor/gossh/state"
 	"github.com/pkg/errors"
 )
 
 func main() {
 
-	state := state.New()
+	inventory := machine.Inventory{}
 
-	// Add a machine to the state
+	// Add a machine to the inventory
 	// As of now, it's hardcoded to a docker container on localhost
 	m, err := machine.New("localhost", 2222, "gossh", "gosshpwd")
 	if err != nil {
 		fmt.Printf("could not get new machine %v: %v\n", m, err)
 		return
 	}
-	state.AddMachine(m)
 
-	// TODO - add inventory, e.g.:
-	// state.AddInventory("./inventory.json")
+	inventory.Add(m)
 
-	// Adding predefined rules from separate packages by using state.AddRule
+	// TODO - add inventory from files, e.g.:
+	// machine.NewInventoryFromFile("./inventory.json")
+
+	play := base.Multi{}
 
 	// file.Exists is not a very helpful rule, it just creates a empty file if it does not exist
-	state.AddRule(file.Exists("/tmp/hello.nothing2"))
+	play.Add(file.Exists("/tmp/hello.nothing2"))
 
 	// apt.Package installs/uninstalls a apt package
-	state.AddRule(apt.Package{
+	play.Add(apt.Package{
 		Name:   "tree",
 		Status: apt.StatusInstalled,
 	})
 
 	// This rule does nothing useful, but just shows off the use of a simple cmd based rule
 	// This will allways run
-	state.AddRule(rule.Cmd{
+	play.Add(base.Cmd{
 		CheckCmd:  "false",
 		EnsureCmd: "ls",
 	})
@@ -52,7 +53,7 @@ func main() {
 	//  as well as reusing the Ensure command of another Rule
 	filename := "somefile.txt"
 
-	state.AddRule(rule.Meta{
+	play.Add(base.Meta{
 		CheckFunc: func(m *machine.Machine, sudo bool) (bool, error) {
 			cmd := fmt.Sprintf("ls -1 /tmp | grep %s", filename)
 			r, err := m.Run(cmd, false)
@@ -70,10 +71,13 @@ func main() {
 		},
 	})
 
-	// Instead of Apply, one could also do Plan (terraform style)
-	err = state.Apply()
-
-	if err != nil {
-		fmt.Println("apply gone wrong", err)
+	// TODO Instead of Apply, one could also do Plan (terraform style)
+	for _, m := range inventory {
+		log.Println("doing machine", m)
+		err = m.Apply(play)
+		if err != nil {
+			fmt.Println("apply gone wrong", err)
+		}
 	}
+
 }
