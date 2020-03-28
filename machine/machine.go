@@ -33,7 +33,9 @@ func New(addr string, port int, user string, sudopass string) (*Machine, error) 
 	var err error
 
 	a, err := getAgentAuths()
-	auths := []ssh.AuthMethod{}
+	auths := []ssh.AuthMethod{
+		ssh.Password(sudopass),
+	}
 	if err == nil {
 		auths = append(auths, a)
 	}

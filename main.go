@@ -16,7 +16,8 @@ func main() {
 	state := state.New()
 
 	// Add a machine to the state
-	m, err := machine.New("localhost", 22, "myUsername", "myPassword")
+	// As of now, it's hardcoded to a docker container on localhost
+	m, err := machine.New("localhost", 2222, "gossh", "gosshpwd")
 	if err != nil {
 		fmt.Printf("could not get new machine %v: %v\n", m, err)
 		return
