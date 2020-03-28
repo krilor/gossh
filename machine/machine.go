@@ -3,10 +3,12 @@ package machine
 import (
 	"bytes"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"strings"
 
+	"github.com/lithammer/shortuuid"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -66,9 +68,15 @@ func (m Machine) isReady() bool {
 
 // Run runs cmd on machine, as sudo or not, and returns the response
 func (m Machine) Run(cmd string, sudo bool) (Response, error) {
+
+	runID := shortuuid.New()
+
+	log.Println(m.String(), runID, "cmd", cmd, "sudo", sudo)
+
 	if !m.isReady() {
 		return Response{}, errors.New("machines must be initialized using machine.New()")
 	}
+
 	session, err := m.client.NewSession()
 	r := Response{}
 
@@ -77,13 +85,18 @@ func (m Machine) Run(cmd string, sudo bool) (Response, error) {
 	}
 	defer session.Close()
 
+	log.Println(m.String(), runID, "session", "ready")
+
 	session.Stdout = &r.Stdout
 	session.Stderr = &r.Stderr
 
 	if sudo {
 		session.Stdin = strings.NewReader(m.sudopass + "\n")
-		err = session.Run("sudo -S " + cmd)
+		sudocmd := "sudo -S " + cmd
+		log.Println(m.String(), runID, "run", sudocmd)
+		err = session.Run(sudocmd)
 	} else {
+		log.Println(m.String(), runID, "run", cmd)
 		err = session.Run(cmd)
 	}
 
@@ -101,6 +114,10 @@ func (m Machine) Run(cmd string, sudo bool) (Response, error) {
 	} else {
 		r.ExitStatus = 0
 	}
+
+	log.Println(m.String(), runID, "stdout", r.Stdout.String())
+	log.Println(m.String(), runID, "stderr", r.Stderr.String())
+	log.Println(m.String(), runID, "exitstatus", r.ExitStatus)
 
 	return r, nil
 }

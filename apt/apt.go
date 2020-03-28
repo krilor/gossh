@@ -28,7 +28,7 @@ type Package struct {
 
 // Check checks if package is in the desired state
 func (p Package) Check(m *machine.Machine, sudo bool) (bool, error) {
-	cmd := fmt.Sprintf("dpkg-query -f '${Package}\t${db:Status-Abbrev}\t${Version}\t${Name}' -W %s", p.Name)
+	cmd := fmt.Sprintf(`dpkg-query -f '${Package}\t${db:Status-Abbrev}\t${Version}\t${Name}' -W %s`, p.Name)
 
 	r, err := m.Run(cmd, false)
 
