@@ -1,38 +1,65 @@
 # GOSSH
 
-This repo is an experiement with creating a declarative configuration management tool using Golang. Think Ansible, but no yaml, just plain Go. WOW - all teh power!
+This repo is an experiement with creating a declarative IT automation and configuration management package for Golang. Think Ansible, but no Yaml, just plain Go. WOW - all teh power!
 
-The project is in a super-early state. **I am looking for API/usage/naming convention input and ideas in general on how to approach this problem.** Have a look at [main.go](main.go) to get a feel for what I currently think it would look like to use the tool/SDK. If you have any ideas please reach out through a GH issue.
+* Declarative - use `rules` to check and ensure state on any linux `host`
+* Agentless - all work is done on remote hosts by issuing commands via SSH
+* Efficient - leverage ready-made rules to kick-start your IT automation
 
-The tool will probably be limited to configuring linux machines over SSH.
+**The project is in a super-early state. I am looking for API/usage/naming convention input and ideas in general on how to approach this problem.** Have a look at [examples](examples/random/main.go) to get a feel for what I currently think it would look like to use the package. If you have any ideas please reach out through a GH issue.
 
-## Rules
+## Building blocks
 
-The base building block of the declarative mindset baked into this experiment is the notion of a [Rule](rule/machine.go).
+The package has only a handful main concepts or building blocks.
+
+### Rules
+
+The base building block of the declarative mindset baked into this experiment is the notion of a [Rule](rule.go).
 A rule is an interface with two functions, _Check_ and _Ensure_, that does what it sounds like. _Check_ checks the state, _Ensure_ ensures the state.
 
-An example of such a rule is [apt.Package](apt/apt.go). _Check_ verifies if the apt package is installed or not, and _Ensure_ (un)installs the package. Both _Check_ and _Ensure_ are dependent on the declared PackageStatus (installed or not installed) and package name.
+An example of such a rule is [apt.Package](rules/x/apt/apt.go). _Check_ verifies if the apt package is installed or not, and _Ensure_ (un)installs the package. Both _Check_ and _Ensure_ are dependent on the declared PackageStatus (installed or not installed) and package name.
 
-`Rules` run on `Machines`.
+Rules are made up of imperative code/logic, other declarative rules or a combination of both. Rules can be nested infinately.
 
-Implemented rules (just to show some ideas):
+`Rules` are _applied_ to `Hosts`, and the hirerachy of calls are surfaced using `Trace`
+
+Implemented/example rules (just to show some ideas):
 
 * file.Exists - creates an empty file if it does not exists
 * apt.Package - install/uninstall apt packages
-* machine.Cmd - run shell commands as Check and Ensure. Check depends on the ExitStatus code.
-* machine.Meta - for constructing meta-rules on the fly. This is where imperative mode kicks in.
+* base.Cmd - run shell commands as Check and Ensure. Check depends on the ExitStatus code.
+* base.Meta - for constructing meta-rules on the fly. This is where imperative mode kicks in.
 
-## Usage - give it a spin
+
+### Hosts
+
+A [Host](host.go) is a bare-metal server, virtual machine or container running Linux. Gossh connects to and does all work on hosts using SSH.
+
+### Inventories
+
+An [Inventory](inventory.go) is a list of Hosts.
+
+### Trace
+
+[Trace](trace.go) is how gossh keeps track of which rules are nested inside which rules, and what rule-hierachy a SSH command originates from.
+
+## Usage - give it a spin using docker
 
 _Please remeber that this is very experimental_
 
-If you want to try it out, fire up a container or VM with SSH enabled. Then edit the `machine.New()` line in [main.go](main.go) and run using `go run main.go`.
-
-Requirements
+Prerequisites:
 
 * Go
-* a target vm running debian linux
-* ssh key in ssh-agent
+* Docker
+
+This is what you do:
+
+0. Clone this repo
+1. Build and run a SSH enabled Ubuntu container by running `make docker-up`
+2. Cd over to [examples/random](examples/random) and try running it with `go run main.go`
+3. Have a look at the output
+4. Modify the example script however you like and run again.
+5. Kill and remove the container using `make docker-down`
 
 ## Motivation
 
@@ -44,11 +71,19 @@ In essence, the experiment aims to take all the things I love about Ansible and 
 
 I think the Go language, typechecking, compile-time checks, standard library, package manager and simplicity makes it perfect starting point for nice configuration management tool.
 
+## References
+
+### Early feedback Reddit threads
+
+* 2020-03-28 [Show me the gnarliest [Ansible] config you know?](https://www.reddit.com/r/ansible/comments/fq3v0b/show_me_the_gnarliest_config_you_know/)
+* 2020-03-27 [Declarative configuration management in Go? Need input on what you think Ansible with no YAML, only Go, should look like](https://www.reddit.com/r/golang/comments/fpjavy/declarative_configuration_management_in_go_need/)
+
 ## Inspiration
 
 This project is heavily inspired by
 
 * Pulumi
+* Puppet Bolt
 * Ansible
 * GOSS
 
