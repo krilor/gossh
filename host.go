@@ -1,4 +1,4 @@
-package machine
+package gossh
 
 import (
 	"bytes"
@@ -13,18 +13,8 @@ import (
 	"golang.org/x/crypto/ssh/agent"
 )
 
-// Inventory is a list of Machines
-type Inventory []*Machine
-
-// Add adds m to i
-func (i *Inventory) Add(m *Machine) {
-	l := append(*i, m)
-	*i = l
-	return
-}
-
-// Machine is a remote machine one is trying to connect
-type Machine struct {
+// Host is a remote host one is trying to connect
+type Host struct {
 	client   *ssh.Client
 	addr     string
 	port     int
@@ -32,10 +22,10 @@ type Machine struct {
 	sudopass string
 }
 
-// New returns a Machine based on address, port and user
+// NewHost returns a Host based on address, port and user
 // It will connect to the SSH agent to get any ssh keys
-func New(addr string, port int, user string, sudopass string) (*Machine, error) {
-	m := Machine{
+func NewHost(addr string, port int, user string, sudopass string) (*Host, error) {
+	m := Host{
 		addr:     addr,
 		port:     port,
 		user:     user,
@@ -65,24 +55,24 @@ func New(addr string, port int, user string, sudopass string) (*Machine, error) 
 	return &m, nil
 }
 
-// String implements io.Stringer for a Machine
-func (m *Machine) String() string {
+// String implements io.Stringer for a Host
+func (m *Host) String() string {
 	return fmt.Sprintf("%s@%s:%d", m.user, m.addr, m.port)
 }
 
-// isReady reports if the machine is ready, i.e. if it has been initialized using New()
-func (m Machine) isReady() bool {
+// isReady reports if h is ready, i.e. if it has been initialized using New()
+func (m Host) isReady() bool {
 	return m.client != nil
 }
 
-// Log is logging on the machine
+// Log is logging on the host
 // TODO this should probably use logr with keyValues... or some kind of JSON logging
-func (m *Machine) Log(trace Trace, key string, value string) {
+func (m *Host) Log(trace Trace, key string, value string) {
 	log.Println(m.String(), trace.ID(), trace.Prev(), key, value)
 }
 
-// Run runs cmd on machine, as sudo or not, and returns the response
-func (m Machine) Run(trace Trace, cmd string, sudo bool) (Response, error) {
+// Run runs cmd on host, as sudo or not, and returns the response
+func (m Host) Run(trace Trace, cmd string, sudo bool) (Response, error) {
 
 	trace = trace.Span()
 	m.Log(trace, "run", "start")
@@ -92,7 +82,7 @@ func (m Machine) Run(trace Trace, cmd string, sudo bool) (Response, error) {
 	m.Log(trace, "sudo", fmt.Sprintf("%v", sudo))
 
 	if !m.isReady() {
-		return Response{}, errors.New("machines must be initialized using machine.New()")
+		return Response{}, errors.New("hosts must be initialized using gossh.NewHost()")
 	}
 
 	session, err := m.client.NewSession()
@@ -147,7 +137,7 @@ func (m Machine) Run(trace Trace, cmd string, sudo bool) (Response, error) {
 // Apply applies Rule r on m, i.e. runs Check and conditionally runs Ensure
 // Id must be unique string. //TODO - how to explain this
 // TODO - maybe use ... on r to allow specification of multiple rules at once
-func (m *Machine) Apply(id string, trace Trace, r Rule) error {
+func (m *Host) Apply(id string, trace Trace, r Rule) error {
 
 	trace = trace.Span()
 	m.Log(trace, "apply", "start")
@@ -174,7 +164,7 @@ func (m *Machine) Apply(id string, trace Trace, r Rule) error {
 	m.Log(span, "ensure", "end")
 
 	if err != nil {
-		return errors.Wrapf(err, "could not ensure rule %v on machine %v", r, m)
+		return errors.Wrapf(err, "could not ensure rule %v on host %v", r, m)
 	}
 
 	return nil

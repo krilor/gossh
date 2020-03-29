@@ -4,29 +4,29 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/krilor/gossh/apt"
-	"github.com/krilor/gossh/base"
-	"github.com/krilor/gossh/file"
-	"github.com/krilor/gossh/machine"
+	"github.com/krilor/gossh"
+	"github.com/krilor/gossh/rules/x/apt"
+	"github.com/krilor/gossh/rules/x/base"
+	"github.com/krilor/gossh/rules/x/file"
 	"github.com/pkg/errors"
 )
 
 func main() {
 
-	inventory := machine.Inventory{}
+	inventory := gossh.Inventory{}
 
-	// Add a machine to the inventory
+	// Add a host to the inventory
 	// As of now, it's hardcoded to a docker container on localhost
-	m, err := machine.New("localhost", 2222, "gossh", "gosshpwd")
+	m, err := gossh.NewHost("localhost", 2222, "gossh", "gosshpwd")
 	if err != nil {
-		fmt.Printf("could not get new machine %v: %v\n", m, err)
+		fmt.Printf("could not get new host %v: %v\n", m, err)
 		return
 	}
 
 	inventory.Add(m)
 
 	// TODO - add inventory from files, e.g.:
-	// machine.NewInventoryFromFile("./inventory.json")
+	// gossh.NewInventoryFromFile("./inventory.json")
 
 	bootstrap := base.Multi{}
 
@@ -54,7 +54,7 @@ func main() {
 	filename := "somefile.txt"
 
 	bootstrap.Add(base.Meta{
-		CheckFunc: func(trace machine.Trace, m *machine.Machine) (bool, error) {
+		CheckFunc: func(trace gossh.Trace, m *gossh.Host) (bool, error) {
 			cmd := fmt.Sprintf("ls -1 /tmp | grep %s", filename)
 			r, err := m.Run(trace, cmd, false)
 			if err != nil {
@@ -66,7 +66,7 @@ func main() {
 
 			return false, nil
 		},
-		EnsureFunc: func(trace machine.Trace, m *machine.Machine) error {
+		EnsureFunc: func(trace gossh.Trace, m *gossh.Host) error {
 			return file.Exists("/tmp/"+filename).Ensure(trace, m)
 		},
 	})
@@ -75,8 +75,8 @@ func main() {
 
 	// TODO Instead of Apply, one could also do Plan (terraform style)
 	for _, m := range inventory {
-		log.Println("doing machine", m)
-		err = m.Apply("bootstrap", machine.NewTrace(), bootstrap)
+		log.Println("doing host", m)
+		err = m.Apply("bootstrap", gossh.NewTrace(), bootstrap)
 		if err != nil {
 			fmt.Println("apply of bootstrap gone wrong", err)
 		}

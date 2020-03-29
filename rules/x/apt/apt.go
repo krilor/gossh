@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/krilor/gossh/machine"
+	"github.com/krilor/gossh"
 	"github.com/pkg/errors"
 )
 
@@ -27,7 +27,7 @@ type Package struct {
 }
 
 // Check checks if package is in the desired state
-func (p Package) Check(trace machine.Trace, m *machine.Machine) (bool, error) {
+func (p Package) Check(trace gossh.Trace, m *gossh.Host) (bool, error) {
 	cmd := fmt.Sprintf(`dpkg-query -f '${Package}\t${db:Status-Abbrev}\t${Version}\t${Name}' -W %s`, p.Name)
 
 	r, err := m.Run(trace, cmd, false)
@@ -51,7 +51,7 @@ func (p Package) Check(trace machine.Trace, m *machine.Machine) (bool, error) {
 }
 
 // Ensure ensures that the package is in the desiStatusInstalledred state
-func (p Package) Ensure(trace machine.Trace, m *machine.Machine) error {
+func (p Package) Ensure(trace gossh.Trace, m *gossh.Host) error {
 
 	actions := map[PackageStatus]string{
 		StatusInstalled:    "install",

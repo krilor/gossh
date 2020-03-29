@@ -1,8 +1,8 @@
-package machine
+package gossh
 
 import "github.com/lithammer/shortuuid"
 
-// Trace is a type used to trace Apply and Run on Machines
+// Trace is a type used to trace Apply and Run on Hosts
 type Trace struct {
 	id   string
 	prev string

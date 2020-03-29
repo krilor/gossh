@@ -3,7 +3,7 @@ package base
 import (
 	"fmt"
 
-	"github.com/krilor/gossh/machine"
+	"github.com/krilor/gossh"
 	"github.com/pkg/errors"
 )
 
@@ -16,7 +16,7 @@ type Cmd struct {
 }
 
 // Check will pass if Cmd's CheckCmd return ExitStatus equals 0
-func (c Cmd) Check(trace machine.Trace, m *machine.Machine) (bool, error) {
+func (c Cmd) Check(trace gossh.Trace, m *gossh.Host) (bool, error) {
 	r, err := m.Run(trace, c.CheckCmd, false)
 
 	if err != nil {
@@ -27,7 +27,7 @@ func (c Cmd) Check(trace machine.Trace, m *machine.Machine) (bool, error) {
 }
 
 // Ensure simply runs Cmd's EnsureCmd
-func (c Cmd) Ensure(trace machine.Trace, m *machine.Machine) error {
+func (c Cmd) Ensure(trace gossh.Trace, m *gossh.Host) error {
 	_, err := m.Run(trace, c.EnsureCmd, false)
 
 	if err != nil {
@@ -39,33 +39,33 @@ func (c Cmd) Ensure(trace machine.Trace, m *machine.Machine) error {
 
 // Meta is a rule that can be used to write your own rules, on the fly
 type Meta struct {
-	CheckFunc  func(trace machine.Trace, m *machine.Machine) (bool, error)
-	EnsureFunc func(trace machine.Trace, m *machine.Machine) error
+	CheckFunc  func(trace gossh.Trace, m *gossh.Host) (bool, error)
+	EnsureFunc func(trace gossh.Trace, m *gossh.Host) error
 }
 
 // Check runs CheckFunc
-func (ma Meta) Check(trace machine.Trace, m *machine.Machine) (bool, error) {
+func (ma Meta) Check(trace gossh.Trace, m *gossh.Host) (bool, error) {
 	return ma.CheckFunc(trace, m)
 }
 
 // Ensure runs EnsureFunc
-func (ma Meta) Ensure(trace machine.Trace, m *machine.Machine) error {
+func (ma Meta) Ensure(trace gossh.Trace, m *gossh.Host) error {
 	return ma.EnsureFunc(trace, m)
 }
 
 // NewMeta can be used to create a new Meta rule
-func NewMeta(check func(trace machine.Trace, m *machine.Machine) (bool, error), ensure func(trace machine.Trace, m *machine.Machine) error) Meta {
+func NewMeta(check func(trace gossh.Trace, m *gossh.Host) (bool, error), ensure func(trace gossh.Trace, m *gossh.Host) error) Meta {
 	return Meta{check, ensure}
 }
 
 // Multi is a rule that consists of a list of rules
 //
 // Check will allways return false and nil and only serves as a building block for nested rules.
-type Multi []machine.Rule
+type Multi []gossh.Rule
 
 // Check implements Checker
 // Check will allways return false and nil
-func (p Multi) Check(trace machine.Trace, m *machine.Machine) (bool, error) {
+func (p Multi) Check(trace gossh.Trace, m *gossh.Host) (bool, error) {
 	return false, nil
 }
 
@@ -74,7 +74,7 @@ func (p Multi) Check(trace machine.Trace, m *machine.Machine) (bool, error) {
 // Ensure runs Check and Ensure on all rules in the list.
 //
 // Multi will stop executing and return an error if encountering an error from any Check or Ensure method.
-func (p Multi) Ensure(trace machine.Trace, m *machine.Machine) error {
+func (p Multi) Ensure(trace gossh.Trace, m *gossh.Host) error {
 
 	for i, r := range p {
 		m.Apply(fmt.Sprintf("multi%d", i), trace, r)
@@ -84,7 +84,7 @@ func (p Multi) Ensure(trace machine.Trace, m *machine.Machine) error {
 }
 
 // Add adds a rule to Multi p
-func (p *Multi) Add(r machine.Rule) {
+func (p *Multi) Add(r gossh.Rule) {
 	l := append(*p, r)
 	*p = l
 	return
