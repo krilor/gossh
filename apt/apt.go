@@ -27,10 +27,10 @@ type Package struct {
 }
 
 // Check checks if package is in the desired state
-func (p Package) Check(m *machine.Machine, sudo bool) (bool, error) {
+func (p Package) Check(trace machine.Trace, m *machine.Machine) (bool, error) {
 	cmd := fmt.Sprintf(`dpkg-query -f '${Package}\t${db:Status-Abbrev}\t${Version}\t${Name}' -W %s`, p.Name)
 
-	r, err := m.Run(cmd, false)
+	r, err := m.Run(trace, cmd, false)
 
 	if err != nil {
 		return false, errors.Wrapf(err, "could not check package status for %s", p.Name)
@@ -51,7 +51,7 @@ func (p Package) Check(m *machine.Machine, sudo bool) (bool, error) {
 }
 
 // Ensure ensures that the package is in the desiStatusInstalledred state
-func (p Package) Ensure(m *machine.Machine, sudo bool) error {
+func (p Package) Ensure(trace machine.Trace, m *machine.Machine) error {
 
 	actions := map[PackageStatus]string{
 		StatusInstalled:    "install",
@@ -60,7 +60,7 @@ func (p Package) Ensure(m *machine.Machine, sudo bool) error {
 
 	cmd := fmt.Sprintf("apt %s -y %s", actions[p.Status], p.Name)
 
-	r, err := m.Run(cmd, true)
+	r, err := m.Run(trace, cmd, true)
 
 	if err != nil || r.ExitStatus != 0 {
 		return errors.Wrapf(err, "could not %s package %s", actions[p.Status], p.Name)

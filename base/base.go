@@ -1,7 +1,7 @@
 package base
 
 import (
-	"log"
+	"fmt"
 
 	"github.com/krilor/gossh/machine"
 	"github.com/pkg/errors"
@@ -16,8 +16,8 @@ type Cmd struct {
 }
 
 // Check will pass if Cmd's CheckCmd return ExitStatus equals 0
-func (c Cmd) Check(m *machine.Machine, sudo bool) (bool, error) {
-	r, err := m.Run(c.CheckCmd, sudo)
+func (c Cmd) Check(trace machine.Trace, m *machine.Machine) (bool, error) {
+	r, err := m.Run(trace, c.CheckCmd, false)
 
 	if err != nil {
 		return false, errors.Wrapf(err, "command %s failed", c.CheckCmd)
@@ -27,8 +27,8 @@ func (c Cmd) Check(m *machine.Machine, sudo bool) (bool, error) {
 }
 
 // Ensure simply runs Cmd's EnsureCmd
-func (c Cmd) Ensure(m *machine.Machine, sudo bool) error {
-	_, err := m.Run(c.EnsureCmd, sudo)
+func (c Cmd) Ensure(trace machine.Trace, m *machine.Machine) error {
+	_, err := m.Run(trace, c.EnsureCmd, false)
 
 	if err != nil {
 		return errors.Wrapf(err, "command %s failed", c.EnsureCmd)
@@ -37,24 +37,24 @@ func (c Cmd) Ensure(m *machine.Machine, sudo bool) error {
 	return nil
 }
 
-// Meta is a rule that can be used to write your own rules
+// Meta is a rule that can be used to write your own rules, on the fly
 type Meta struct {
-	CheckFunc  func(m *machine.Machine, sudo bool) (bool, error)
-	EnsureFunc func(m *machine.Machine, sudo bool) error
+	CheckFunc  func(trace machine.Trace, m *machine.Machine) (bool, error)
+	EnsureFunc func(trace machine.Trace, m *machine.Machine) error
 }
 
 // Check runs CheckFunc
-func (ma Meta) Check(m *machine.Machine, sudo bool) (bool, error) {
-	return ma.CheckFunc(m, sudo)
+func (ma Meta) Check(trace machine.Trace, m *machine.Machine) (bool, error) {
+	return ma.CheckFunc(trace, m)
 }
 
 // Ensure runs EnsureFunc
-func (ma Meta) Ensure(m *machine.Machine, sudo bool) error {
-	return ma.EnsureFunc(m, sudo)
+func (ma Meta) Ensure(trace machine.Trace, m *machine.Machine) error {
+	return ma.EnsureFunc(trace, m)
 }
 
 // NewMeta can be used to create a new Meta rule
-func NewMeta(check func(m *machine.Machine, sudo bool) (bool, error), ensure func(m *machine.Machine, sudo bool) error) Meta {
+func NewMeta(check func(trace machine.Trace, m *machine.Machine) (bool, error), ensure func(trace machine.Trace, m *machine.Machine) error) Meta {
 	return Meta{check, ensure}
 }
 
@@ -65,7 +65,7 @@ type Multi []machine.Rule
 
 // Check implements Checker
 // Check will allways return false and nil
-func (p Multi) Check(m *machine.Machine, sudo bool) (bool, error) {
+func (p Multi) Check(trace machine.Trace, m *machine.Machine) (bool, error) {
 	return false, nil
 }
 
@@ -74,11 +74,10 @@ func (p Multi) Check(m *machine.Machine, sudo bool) (bool, error) {
 // Ensure runs Check and Ensure on all rules in the list.
 //
 // Multi will stop executing and return an error if encountering an error from any Check or Ensure method.
-func (p Multi) Ensure(m *machine.Machine, sudo bool) error {
+func (p Multi) Ensure(trace machine.Trace, m *machine.Machine) error {
 
-	for _, r := range p {
-		log.Printf("Running rule %v", r)
-		m.Apply(r)
+	for i, r := range p {
+		m.Apply(fmt.Sprintf("multi%d", i), trace, r)
 	}
 
 	return nil

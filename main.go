@@ -28,20 +28,20 @@ func main() {
 	// TODO - add inventory from files, e.g.:
 	// machine.NewInventoryFromFile("./inventory.json")
 
-	play := base.Multi{}
+	bootstrap := base.Multi{}
 
 	// file.Exists is not a very helpful rule, it just creates a empty file if it does not exist
-	play.Add(file.Exists("/tmp/hello.nothing2"))
+	bootstrap.Add(file.Exists("/tmp/hello.nothing2"))
 
 	// apt.Package installs/uninstalls a apt package
-	play.Add(apt.Package{
+	bootstrap.Add(apt.Package{
 		Name:   "tree",
 		Status: apt.StatusInstalled,
 	})
 
 	// This rule does nothing useful, but just shows off the use of a simple cmd based rule
 	// This will allways run
-	play.Add(base.Cmd{
+	bootstrap.Add(base.Cmd{
 		CheckCmd:  "false",
 		EnsureCmd: "ls",
 	})
@@ -53,10 +53,10 @@ func main() {
 	//  as well as reusing the Ensure command of another Rule
 	filename := "somefile.txt"
 
-	play.Add(base.Meta{
-		CheckFunc: func(m *machine.Machine, sudo bool) (bool, error) {
+	bootstrap.Add(base.Meta{
+		CheckFunc: func(trace machine.Trace, m *machine.Machine) (bool, error) {
 			cmd := fmt.Sprintf("ls -1 /tmp | grep %s", filename)
-			r, err := m.Run(cmd, false)
+			r, err := m.Run(trace, cmd, false)
 			if err != nil {
 				return false, errors.Wrap(err, "could not check for somefile")
 			}
@@ -66,17 +66,19 @@ func main() {
 
 			return false, nil
 		},
-		EnsureFunc: func(m *machine.Machine, sudo bool) error {
-			return file.Exists("/tmp/"+filename).Ensure(m, false)
+		EnsureFunc: func(trace machine.Trace, m *machine.Machine) error {
+			return file.Exists("/tmp/"+filename).Ensure(trace, m)
 		},
 	})
+
+	fmt.Println("len", len(bootstrap))
 
 	// TODO Instead of Apply, one could also do Plan (terraform style)
 	for _, m := range inventory {
 		log.Println("doing machine", m)
-		err = m.Apply(play)
+		err = m.Apply("bootstrap", machine.NewTrace(), bootstrap)
 		if err != nil {
-			fmt.Println("apply gone wrong", err)
+			fmt.Println("apply of bootstrap gone wrong", err)
 		}
 	}
 

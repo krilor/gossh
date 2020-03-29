@@ -11,10 +11,11 @@ import (
 type Exists string
 
 // Check if file exists
-func (e Exists) Check(m *machine.Machine, sudo bool) (bool, error) {
+func (e Exists) Check(trace machine.Trace, m *machine.Machine) (bool, error) {
+
 	cmd := fmt.Sprintf("stat %s", string(e))
 
-	r, err := m.Run(cmd, sudo)
+	r, err := m.Run(trace, cmd, false)
 
 	if err != nil {
 		return false, errors.Wrap(err, "stat errored")
@@ -28,9 +29,9 @@ func (e Exists) Check(m *machine.Machine, sudo bool) (bool, error) {
 }
 
 // Ensure that file exists
-func (e Exists) Ensure(m *machine.Machine, sudo bool) error {
+func (e Exists) Ensure(trace machine.Trace, m *machine.Machine) error {
 	cmd := fmt.Sprintf("touch %s", string(e))
-	r, err := m.Run(cmd, sudo)
+	r, err := m.Run(trace, cmd, false)
 	if err != nil {
 		return errors.Wrap(err, "could not ensure file")
 	}

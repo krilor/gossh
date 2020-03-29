@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/lithammer/shortuuid"
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
@@ -76,12 +75,21 @@ func (m Machine) isReady() bool {
 	return m.client != nil
 }
 
+// Log is logging on the machine
+// TODO this should probably use logr with keyValues... or some kind of JSON logging
+func (m *Machine) Log(trace Trace, key string, value string) {
+	log.Println(m.String(), trace.ID(), trace.Prev(), key, value)
+}
+
 // Run runs cmd on machine, as sudo or not, and returns the response
-func (m Machine) Run(cmd string, sudo bool) (Response, error) {
+func (m Machine) Run(trace Trace, cmd string, sudo bool) (Response, error) {
 
-	runID := shortuuid.New()
+	trace = trace.Span()
+	m.Log(trace, "run", "start")
+	defer m.Log(trace, "run", "end")
 
-	log.Println(m.String(), runID, "cmd", cmd, "sudo", sudo)
+	m.Log(trace, "cmd", cmd)
+	m.Log(trace, "sudo", fmt.Sprintf("%v", sudo))
 
 	if !m.isReady() {
 		return Response{}, errors.New("machines must be initialized using machine.New()")
@@ -95,19 +103,23 @@ func (m Machine) Run(cmd string, sudo bool) (Response, error) {
 	}
 	defer session.Close()
 
-	log.Println(m.String(), runID, "session", "ready")
+	m.Log(trace, "session", "ready")
 
 	session.Stdout = &r.Stdout
 	session.Stderr = &r.Stderr
 
 	if sudo {
+
 		session.Stdin = strings.NewReader(m.sudopass + "\n")
 		sudocmd := "sudo -S " + cmd
-		log.Println(m.String(), runID, "run", sudocmd)
+		m.Log(trace, "run", sudocmd)
 		err = session.Run(sudocmd)
+
 	} else {
-		log.Println(m.String(), runID, "run", cmd)
+
+		m.Log(trace, "run", cmd)
 		err = session.Run(cmd)
+
 	}
 
 	if err != nil {
@@ -125,45 +137,47 @@ func (m Machine) Run(cmd string, sudo bool) (Response, error) {
 		r.ExitStatus = 0
 	}
 
-	log.Println(m.String(), runID, "stdout", r.Stdout.String())
-	log.Println(m.String(), runID, "stderr", r.Stderr.String())
-	log.Println(m.String(), runID, "exitstatus", r.ExitStatus)
+	m.Log(trace, "stdout", r.Stdout.String())
+	m.Log(trace, "stderr", r.Stderr.String())
+	m.Log(trace, "exitstatus", fmt.Sprintf("%d", r.ExitStatus))
 
 	return r, nil
 }
 
 // Apply applies Rule r on m, i.e. runs Check and conditionally runs Ensure
+// Id must be unique string. //TODO - how to explain this
 // TODO - maybe use ... on r to allow specification of multiple rules at once
-func (m *Machine) Apply(r Rule) error {
+func (m *Machine) Apply(id string, trace Trace, r Rule) error {
 
-	ok, err := r.Check(m, false)
+	trace = trace.Span()
+	m.Log(trace, "apply", "start")
+	defer m.Log(trace, "apply", "end")
+
+	span := trace.Span()
+	m.Log(span, "check", "start")
+	ok, err := r.Check(span, m)
+	m.Log(span, "check", "end")
+
 	if err != nil {
-		return fmt.Errorf("could not check rule %v on machinve %v", r, m)
+		return errors.Wrapf(err, "could not check rule %v on machinve %v", r, m)
 	}
 
 	if ok {
-		log.Printf("Rule check %v was ok", r)
 		return nil
 	}
 
-	log.Printf("Rule check %v was NOT ok", r)
+	m.Log(trace, "check", fmt.Sprintf("%v", ok))
 
-	err = r.Ensure(m, false)
+	span = trace.Span()
+	m.Log(span, "ensure", "start")
+	err = r.Ensure(span, m)
+	m.Log(span, "ensure", "end")
+
 	if err != nil {
-		return fmt.Errorf("could not ensure rule %v on machine %v", r, m)
+		return errors.Wrapf(err, "could not ensure rule %v on machine %v", r, m)
 	}
 
 	return nil
-}
-
-// Check runs Checker c on m
-func (m *Machine) Check(c Checker) (bool, error) {
-	return c.Check(m, false)
-}
-
-// Ensure runs Ensurer e on m
-func (m *Machine) Ensure(c Ensurer) error {
-	return c.Ensure(m, false)
 }
 
 // Response contains the response from a remotely run cmd
