@@ -4,8 +4,9 @@ import "github.com/lithammer/shortuuid"
 
 // Trace is a type used to trace Apply and Run on Hosts
 type Trace struct {
-	id   string
-	prev string
+	id    string
+	prev  string
+	level int
 }
 
 // String implements fmt.Stringer
@@ -17,6 +18,7 @@ func (t Trace) String() string {
 func (t Trace) Span() Trace {
 	t.prev = t.id
 	t.id = newUniqueID()
+	t.level = t.level + 1
 	return t
 }
 

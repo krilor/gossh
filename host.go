@@ -70,7 +70,7 @@ func (h *Host) isReady() bool {
 
 // Log is logging
 func (h *Host) Log(trace Trace, msg string, keyAndValues ...string) {
-	log.Println(h.String(), trace.id, trace.prev, keyAndValues)
+	log.Println(h.String(), trace.id, trace.prev, msg, keyAndValues)
 }
 
 // RunChange are used to run cmd's that RunChanges the state on m
@@ -156,12 +156,31 @@ func (h *Host) run(trace Trace, cmd string, user string) (Response, error) {
 	return r, nil
 }
 
+// nSpaces is a little utility to get n spaces and lines
+func nSpaces(n int) string {
+	b := strings.Builder{}
+	for i := 0; i < n; i++ {
+		if i%2 == 0 {
+			b.Write([]byte(" "))
+		} else {
+
+			b.Write([]byte("│"))
+		}
+	}
+
+	return b.String()
+}
+
 // Apply applies Rule r on m, i.e. runs Check and conditionally runs Ensure
 // Id must be unique string. //TODO - how to explain this
 // TODO - maybe use ... on r to allow specification of multiple rules at once
 func (h *Host) Apply(trace Trace, name string, r Rule) error {
 
+	h.Log(trace, "apply", "name", name)
+
 	trace = trace.Span()
+	fmt.Printf("%s┌ %s %s\n", nSpaces(trace.level), name, "Start")
+
 	h.Log(trace, "apply", "start")
 	defer h.Log(trace, "apply", "end")
 
@@ -171,10 +190,12 @@ func (h *Host) Apply(trace Trace, name string, r Rule) error {
 	h.Log(span, "check", "end")
 
 	if err != nil {
+		fmt.Printf("%s└ %s %s\n", nSpaces(trace.level), name, "ERROR")
 		return errors.Wrapf(err, "could not check rule %v on machinve %v", r, h)
 	}
 
 	if ok {
+		fmt.Printf("%s└ %s %s\n", nSpaces(trace.level), name, "OK")
 		return nil
 	}
 
@@ -186,9 +207,11 @@ func (h *Host) Apply(trace Trace, name string, r Rule) error {
 	h.Log(span, "ensure", "end")
 
 	if err != nil {
+		fmt.Printf("%s└ %s %s\n", nSpaces(trace.level), name, "CHANGED")
 		return errors.Wrapf(err, "could not ensure rule %v on host %v", r, h)
 	}
 
+	fmt.Printf("%s└ %s %s\n", nSpaces(trace.level), name, "ERROR")
 	return nil
 }
 

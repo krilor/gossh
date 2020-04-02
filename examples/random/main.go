@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os"
 
 	"github.com/krilor/gossh"
 	"github.com/krilor/gossh/rules/x/apt"
@@ -12,6 +13,14 @@ import (
 )
 
 func main() {
+
+	f, err := os.OpenFile("random.log", os.O_RDWR|os.O_CREATE, 0666)
+	if err != nil {
+		fmt.Println("error opening file: %v", err)
+		os.Exit(1)
+	}
+	defer f.Close()
+	log.SetOutput(f)
 
 	inventory := gossh.Inventory{}
 
@@ -71,9 +80,6 @@ func main() {
 		},
 	})
 
-	fmt.Println("len", len(bootstrap))
-
-	// TODO Instead of Apply, one could also do Plan (terraform style)
 	for _, m := range inventory {
 		log.Println("doing host", m)
 		err = m.Apply(gossh.NewTrace(), "bootstrap", bootstrap)
