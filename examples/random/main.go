@@ -16,7 +16,7 @@ func main() {
 
 	f, err := os.OpenFile("random.log", os.O_RDWR|os.O_CREATE, 0666)
 	if err != nil {
-		fmt.Println("error opening file: %v", err)
+		fmt.Printf("error opening file: %v\n", err)
 		os.Exit(1)
 	}
 	defer f.Close()

@@ -190,7 +190,7 @@ func (h *Host) Apply(trace Trace, name string, r Rule) error {
 	h.Log(span, "check", "end")
 
 	if err != nil {
-		fmt.Printf("%s└ %s %s\n", nSpaces(trace.level), name, "ERROR")
+		fmt.Printf("%s└ %s %s: %v\n", nSpaces(trace.level), name, "ERROR", err)
 		return errors.Wrapf(err, "could not check rule %v on machinve %v", r, h)
 	}
 
@@ -211,7 +211,7 @@ func (h *Host) Apply(trace Trace, name string, r Rule) error {
 		return errors.Wrapf(err, "could not ensure rule %v on host %v", r, h)
 	}
 
-	fmt.Printf("%s└ %s %s\n", nSpaces(trace.level), name, "ERROR")
+	fmt.Printf("%s└ %s %s\n", nSpaces(trace.level), name, "OK")
 	return nil
 }
 
