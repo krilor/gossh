@@ -31,7 +31,7 @@ func main() {
 	bootstrap := base.Multi{}
 
 	// file.Exists is not a very helpful rule, it just creates a empty file if it does not exist
-	bootstrap.Add(file.Exists("/tmp/hello.nothing2"))
+	bootstrap.Add(file.Exists{Path: "/tmp/hello.nothing2"})
 
 	// apt.Package installs/uninstalls a apt package
 	bootstrap.Add(apt.Package{
@@ -54,9 +54,9 @@ func main() {
 	filename := "somefile.txt"
 
 	bootstrap.Add(base.Meta{
-		CheckFunc: func(trace gossh.Trace, m *gossh.Host) (bool, error) {
+		CheckFunc: func(trace gossh.Trace, t gossh.Target) (bool, error) {
 			cmd := fmt.Sprintf("ls -1 /tmp | grep %s", filename)
-			r, err := m.Run(trace, cmd, false)
+			r, err := t.RunQuery(trace, cmd, "")
 			if err != nil {
 				return false, errors.Wrap(err, "could not check for somefile")
 			}
@@ -66,8 +66,8 @@ func main() {
 
 			return false, nil
 		},
-		EnsureFunc: func(trace gossh.Trace, m *gossh.Host) error {
-			return file.Exists("/tmp/"+filename).Ensure(trace, m)
+		EnsureFunc: func(trace gossh.Trace, t gossh.Target) error {
+			return file.Exists{Path: "/tmp/" + filename}.Ensure(trace, m)
 		},
 	})
 
@@ -76,7 +76,7 @@ func main() {
 	// TODO Instead of Apply, one could also do Plan (terraform style)
 	for _, m := range inventory {
 		log.Println("doing host", m)
-		err = m.Apply("bootstrap", gossh.NewTrace(), bootstrap)
+		err = m.Apply(gossh.NewTrace(), "bootstrap", bootstrap)
 		if err != nil {
 			fmt.Println("apply of bootstrap gone wrong", err)
 		}

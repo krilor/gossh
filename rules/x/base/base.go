@@ -13,11 +13,12 @@ import (
 type Cmd struct {
 	CheckCmd  string
 	EnsureCmd string
+	User      string
 }
 
 // Check will pass if Cmd's CheckCmd return ExitStatus equals 0
-func (c Cmd) Check(trace gossh.Trace, m *gossh.Host) (bool, error) {
-	r, err := m.Run(trace, c.CheckCmd, false)
+func (c Cmd) Check(trace gossh.Trace, t gossh.Target) (bool, error) {
+	r, err := t.RunQuery(trace, c.CheckCmd, c.User)
 
 	if err != nil {
 		return false, errors.Wrapf(err, "command %s failed", c.CheckCmd)
@@ -27,10 +28,10 @@ func (c Cmd) Check(trace gossh.Trace, m *gossh.Host) (bool, error) {
 }
 
 // Ensure simply runs Cmd's EnsureCmd
-func (c Cmd) Ensure(trace gossh.Trace, m *gossh.Host) error {
-	_, err := m.Run(trace, c.EnsureCmd, false)
+func (c Cmd) Ensure(trace gossh.Trace, t gossh.Target) error {
+	r, err := t.RunChange(trace, c.EnsureCmd, c.User)
 
-	if err != nil {
+	if err != nil || !r.ExitStatusSuccess() {
 		return errors.Wrapf(err, "command %s failed", c.EnsureCmd)
 	}
 
@@ -39,22 +40,22 @@ func (c Cmd) Ensure(trace gossh.Trace, m *gossh.Host) error {
 
 // Meta is a rule that can be used to write your own rules, on the fly
 type Meta struct {
-	CheckFunc  func(trace gossh.Trace, m *gossh.Host) (bool, error)
-	EnsureFunc func(trace gossh.Trace, m *gossh.Host) error
+	CheckFunc  func(trace gossh.Trace, t gossh.Target) (bool, error)
+	EnsureFunc func(trace gossh.Trace, t gossh.Target) error
 }
 
 // Check runs CheckFunc
-func (ma Meta) Check(trace gossh.Trace, m *gossh.Host) (bool, error) {
-	return ma.CheckFunc(trace, m)
+func (ma Meta) Check(trace gossh.Trace, t gossh.Target) (bool, error) {
+	return ma.CheckFunc(trace, t)
 }
 
 // Ensure runs EnsureFunc
-func (ma Meta) Ensure(trace gossh.Trace, m *gossh.Host) error {
-	return ma.EnsureFunc(trace, m)
+func (ma Meta) Ensure(trace gossh.Trace, t gossh.Target) error {
+	return ma.EnsureFunc(trace, t)
 }
 
 // NewMeta can be used to create a new Meta rule
-func NewMeta(check func(trace gossh.Trace, m *gossh.Host) (bool, error), ensure func(trace gossh.Trace, m *gossh.Host) error) Meta {
+func NewMeta(check func(trace gossh.Trace, t gossh.Target) (bool, error), ensure func(trace gossh.Trace, t gossh.Target) error) Meta {
 	return Meta{check, ensure}
 }
 
@@ -65,7 +66,7 @@ type Multi []gossh.Rule
 
 // Check implements Checker
 // Check will allways return false and nil
-func (p Multi) Check(trace gossh.Trace, m *gossh.Host) (bool, error) {
+func (p Multi) Check(trace gossh.Trace, t gossh.Target) (bool, error) {
 	return false, nil
 }
 
@@ -74,10 +75,14 @@ func (p Multi) Check(trace gossh.Trace, m *gossh.Host) (bool, error) {
 // Ensure runs Check and Ensure on all rules in the list.
 //
 // Multi will stop executing and return an error if encountering an error from any Check or Ensure method.
-func (p Multi) Ensure(trace gossh.Trace, m *gossh.Host) error {
+func (p Multi) Ensure(trace gossh.Trace, t gossh.Target) error {
 
 	for i, r := range p {
-		m.Apply(fmt.Sprintf("multi%d", i), trace, r)
+		name := fmt.Sprintf("multi%d", i)
+		err := t.Apply(trace, name, r)
+		if err != nil {
+			return errors.Wrapf(err, "%s - %s failed to apply", name, r)
+		}
 	}
 
 	return nil

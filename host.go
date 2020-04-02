@@ -20,12 +20,15 @@ type Host struct {
 	port     int
 	user     string
 	sudopass string
+
+	// Validate is used to indicate if the host only allows RunQuery, that does not alter the state of the system
+	Validate bool
 }
 
 // NewHost returns a Host based on address, port and user
 // It will connect to the SSH agent to get any ssh keys
 func NewHost(addr string, port int, user string, sudopass string) (*Host, error) {
-	m := Host{
+	h := Host{
 		addr:     addr,
 		port:     port,
 		user:     user,
@@ -47,45 +50,64 @@ func NewHost(addr string, port int, user string, sudopass string) (*Host, error)
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO
 	}
 
-	m.client, err = ssh.Dial("tcp", fmt.Sprintf("%s:%d", addr, port), &cc)
+	h.client, err = ssh.Dial("tcp", fmt.Sprintf("%s:%d", addr, port), &cc)
 	if err != nil {
-		return &m, errors.Wrapf(err, "unable to establish connection to %s:%d", addr, port)
+		return &h, errors.Wrapf(err, "unable to establish connection to %s:%d", addr, port)
 	}
 
-	return &m, nil
+	return &h, nil
 }
 
 // String implements io.Stringer for a Host
-func (m *Host) String() string {
-	return fmt.Sprintf("%s@%s:%d", m.user, m.addr, m.port)
+func (h *Host) String() string {
+	return fmt.Sprintf("%s@%s:%d", h.user, h.addr, h.port)
 }
 
 // isReady reports if h is ready, i.e. if it has been initialized using New()
-func (m Host) isReady() bool {
-	return m.client != nil
+func (h *Host) isReady() bool {
+	return h.client != nil
 }
 
-// Log is logging on the host
-// TODO this should probably use logr with keyValues... or some kind of JSON logging
-func (m *Host) Log(trace Trace, key string, value string) {
-	log.Println(m.String(), trace.ID(), trace.Prev(), key, value)
+// Log is logging
+func (h *Host) Log(trace Trace, msg string, keyAndValues ...string) {
+	log.Println(h.String(), trace.id, trace.prev, keyAndValues)
+}
+
+// RunChange are used to run cmd's that RunChanges the state on m
+func (h *Host) RunChange(trace Trace, cmd string, user string) (Response, error) {
+	h.Log(trace, "runchange", "invoked")
+	if h.Validate {
+		h.Log(trace, "runchange", "blocked by validate")
+		return Response{
+			Stdout:     *bytes.NewBuffer([]byte{}),
+			Stderr:     *bytes.NewBuffer([]byte{}),
+			ExitStatus: BlockedByValidate,
+		}, nil
+	}
+	return h.run(trace, cmd, user)
+}
+
+// RunQuery are used to run cmd's that doet not modify anything on m
+func (h *Host) RunQuery(trace Trace, cmd string, user string) (Response, error) {
+	h.Log(trace, "runquery", "invoked")
+	return h.run(trace, cmd, user)
 }
 
 // Run runs cmd on host, as sudo or not, and returns the response
-func (m Host) Run(trace Trace, cmd string, sudo bool) (Response, error) {
+func (h *Host) run(trace Trace, cmd string, user string) (Response, error) {
 
 	trace = trace.Span()
-	m.Log(trace, "run", "start")
-	defer m.Log(trace, "run", "end")
+	h.Log(trace, "run", "start")
+	defer h.Log(trace, "run", "end")
 
-	m.Log(trace, "cmd", cmd)
-	m.Log(trace, "sudo", fmt.Sprintf("%v", sudo))
+	h.Log(trace, "cmd", cmd)
+	h.Log(trace, "sudo", fmt.Sprintf("%v", user))
 
-	if !m.isReady() {
+	if !h.isReady() {
 		return Response{}, errors.New("hosts must be initialized using gossh.NewHost()")
 	}
 
-	session, err := m.client.NewSession()
+	session, err := h.client.NewSession()
 	r := Response{}
 
 	if err != nil {
@@ -93,21 +115,21 @@ func (m Host) Run(trace Trace, cmd string, sudo bool) (Response, error) {
 	}
 	defer session.Close()
 
-	m.Log(trace, "session", "ready")
+	h.Log(trace, "session", "ready")
 
 	session.Stdout = &r.Stdout
 	session.Stderr = &r.Stderr
 
-	if sudo {
+	if user != "" && user != h.user {
 
-		session.Stdin = strings.NewReader(m.sudopass + "\n")
-		sudocmd := "sudo -S " + cmd
-		m.Log(trace, "run", sudocmd)
+		session.Stdin = strings.NewReader(h.sudopass + "\n")
+		sudocmd := fmt.Sprintf("sudo -S -u %s %s", user, cmd)
+		h.Log(trace, "run", sudocmd)
 		err = session.Run(sudocmd)
 
 	} else {
 
-		m.Log(trace, "run", cmd)
+		h.Log(trace, "run", cmd)
 		err = session.Run(cmd)
 
 	}
@@ -127,9 +149,9 @@ func (m Host) Run(trace Trace, cmd string, sudo bool) (Response, error) {
 		r.ExitStatus = 0
 	}
 
-	m.Log(trace, "stdout", r.Stdout.String())
-	m.Log(trace, "stderr", r.Stderr.String())
-	m.Log(trace, "exitstatus", fmt.Sprintf("%d", r.ExitStatus))
+	h.Log(trace, "stdout", r.Stdout.String())
+	h.Log(trace, "stderr", r.Stderr.String())
+	h.Log(trace, "exitstatus", fmt.Sprintf("%d", r.ExitStatus))
 
 	return r, nil
 }
@@ -137,34 +159,34 @@ func (m Host) Run(trace Trace, cmd string, sudo bool) (Response, error) {
 // Apply applies Rule r on m, i.e. runs Check and conditionally runs Ensure
 // Id must be unique string. //TODO - how to explain this
 // TODO - maybe use ... on r to allow specification of multiple rules at once
-func (m *Host) Apply(id string, trace Trace, r Rule) error {
+func (h *Host) Apply(trace Trace, name string, r Rule) error {
 
 	trace = trace.Span()
-	m.Log(trace, "apply", "start")
-	defer m.Log(trace, "apply", "end")
+	h.Log(trace, "apply", "start")
+	defer h.Log(trace, "apply", "end")
 
 	span := trace.Span()
-	m.Log(span, "check", "start")
-	ok, err := r.Check(span, m)
-	m.Log(span, "check", "end")
+	h.Log(span, "check", "start")
+	ok, err := r.Check(span, h)
+	h.Log(span, "check", "end")
 
 	if err != nil {
-		return errors.Wrapf(err, "could not check rule %v on machinve %v", r, m)
+		return errors.Wrapf(err, "could not check rule %v on machinve %v", r, h)
 	}
 
 	if ok {
 		return nil
 	}
 
-	m.Log(trace, "check", fmt.Sprintf("%v", ok))
+	h.Log(trace, "check", fmt.Sprintf("%v", ok))
 
 	span = trace.Span()
-	m.Log(span, "ensure", "start")
-	err = r.Ensure(span, m)
-	m.Log(span, "ensure", "end")
+	h.Log(span, "ensure", "start")
+	err = r.Ensure(span, h)
+	h.Log(span, "ensure", "end")
 
 	if err != nil {
-		return errors.Wrapf(err, "could not ensure rule %v on host %v", r, m)
+		return errors.Wrapf(err, "could not ensure rule %v on host %v", r, h)
 	}
 
 	return nil
@@ -175,6 +197,13 @@ type Response struct {
 	Stdout     bytes.Buffer
 	Stderr     bytes.Buffer
 	ExitStatus int
+}
+
+// ExitStatusSuccess is a convenience method to check if an exit code is either 0 or BlockedByValidate.
+// It is provided as a form of syntactic sugar.
+func (r Response) ExitStatusSuccess() bool {
+	// TODO add exitStatuses ...int to allow for including more exit statuses as ok.
+	return r.ExitStatus == 0 || r.ExitStatus == BlockedByValidate
 }
 
 func getAgentAuths() (ssh.AuthMethod, error) {

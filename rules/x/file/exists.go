@@ -8,14 +8,17 @@ import (
 )
 
 // Exists is a struct that implements the rule to check if a file exists or not
-type Exists string
+type Exists struct {
+	Path string
+	User string
+}
 
 // Check if file exists
-func (e Exists) Check(trace gossh.Trace, m *gossh.Host) (bool, error) {
+func (e Exists) Check(trace gossh.Trace, t gossh.Target) (bool, error) {
 
-	cmd := fmt.Sprintf("stat %s", string(e))
+	cmd := fmt.Sprintf("stat %s", e.Path)
 
-	r, err := m.Run(trace, cmd, false)
+	r, err := t.RunQuery(trace, cmd, e.User)
 
 	if err != nil {
 		return false, errors.Wrap(err, "stat errored")
@@ -29,13 +32,16 @@ func (e Exists) Check(trace gossh.Trace, m *gossh.Host) (bool, error) {
 }
 
 // Ensure that file exists
-func (e Exists) Ensure(trace gossh.Trace, m *gossh.Host) error {
-	cmd := fmt.Sprintf("touch %s", string(e))
-	r, err := m.Run(trace, cmd, false)
+func (e Exists) Ensure(trace gossh.Trace, t gossh.Target) error {
+
+	cmd := fmt.Sprintf("touch %s", e.Path)
+	r, err := t.RunChange(trace, cmd, e.User)
+
 	if err != nil {
 		return errors.Wrap(err, "could not ensure file")
 	}
-	if r.ExitStatus != 0 {
+
+	if !r.ExitStatusSuccess() {
 		return errors.New("something went wrong with touch")
 	}
 	return nil

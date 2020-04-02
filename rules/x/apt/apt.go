@@ -24,13 +24,14 @@ const (
 type Package struct {
 	Name   string
 	Status PackageStatus
+	User   string
 }
 
 // Check checks if package is in the desired state
-func (p Package) Check(trace gossh.Trace, m *gossh.Host) (bool, error) {
+func (p Package) Check(trace gossh.Trace, t gossh.Target) (bool, error) {
 	cmd := fmt.Sprintf(`dpkg-query -f '${Package}\t${db:Status-Abbrev}\t${Version}\t${Name}' -W %s`, p.Name)
 
-	r, err := m.Run(trace, cmd, false)
+	r, err := t.RunQuery(trace, cmd, p.User)
 
 	if err != nil {
 		return false, errors.Wrapf(err, "could not check package status for %s", p.Name)
@@ -51,7 +52,7 @@ func (p Package) Check(trace gossh.Trace, m *gossh.Host) (bool, error) {
 }
 
 // Ensure ensures that the package is in the desiStatusInstalledred state
-func (p Package) Ensure(trace gossh.Trace, m *gossh.Host) error {
+func (p Package) Ensure(trace gossh.Trace, t gossh.Target) error {
 
 	actions := map[PackageStatus]string{
 		StatusInstalled:    "install",
@@ -60,9 +61,9 @@ func (p Package) Ensure(trace gossh.Trace, m *gossh.Host) error {
 
 	cmd := fmt.Sprintf("apt %s -y %s", actions[p.Status], p.Name)
 
-	r, err := m.Run(trace, cmd, true)
+	r, err := t.RunChange(trace, cmd, p.User)
 
-	if err != nil || r.ExitStatus != 0 {
+	if err != nil || !r.ExitStatusSuccess() {
 		return errors.Wrapf(err, "could not %s package %s", actions[p.Status], p.Name)
 	}
 
