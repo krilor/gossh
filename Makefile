@@ -7,3 +7,5 @@ docker-down :
 	( docker ps -a | grep gossh_ubuntu ) && docker kill gossh_ubuntu || true
 	( docker ps -a | grep gossh_ubuntu ) && docker rm gossh_ubuntu || true
 	ssh-keygen -f ~/.ssh/known_hosts -R "[localhost]:2222"
+
+docker: docker-down docker-up

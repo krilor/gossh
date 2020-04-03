@@ -14,14 +14,14 @@ The package has only a handful main concepts or building blocks.
 
 ### Rules
 
-The base building block of the declarative mindset baked into this experiment is the notion of a [Rule](rule.go).
+The base building block of the declarative mindset baked into this experiment is the notion of a [Rule](gossh.go).
 A rule is an interface with two functions, _Check_ and _Ensure_, that does what it sounds like. _Check_ checks the state, _Ensure_ ensures the state.
 
 An example of such a rule is [apt.Package](rules/x/apt/apt.go). _Check_ verifies if the apt package is installed or not, and _Ensure_ (un)installs the package. Both _Check_ and _Ensure_ are dependent on the declared PackageStatus (installed or not installed) and package name.
 
 Rules are made up of imperative code/logic, other declarative rules or a combination of both. Rules can be nested infinately.
 
-`Rules` are _applied_ to `Hosts`, and the hirerachy of calls are surfaced using `Trace`
+`Rules` are _applied_ to `Targets`, and the hirerachy of calls are surfaced using `Trace`
 
 Implemented/example rules (just to show some ideas):
 
@@ -31,9 +31,16 @@ Implemented/example rules (just to show some ideas):
 * base.Meta - for constructing meta-rules on the fly. This is where imperative mode kicks in.
 
 
-### Hosts
+### Target
 
-A [Host](host.go) is a bare-metal server, virtual machine or container running Linux. Gossh connects to and does all work on hosts using SSH.
+A [Target](gossh.go) is a bare-metal server, virtual machine or container. It can be localhost, a remote host (SSH) or a docker container on localhost.
+
+Requirements
+
+* Running Linux
+* Bash shell available
+* Sudo installed
+* SSH'able (remote)
 
 ### Inventories
 
@@ -70,6 +77,12 @@ Ansible has been my favorite CM tool for a while. It's awesome! But if I'm hones
 In essence, the experiment aims to take all the things I love about Ansible and bring all the nice things that Pulumi promises, but for configuration, not provisioning.
 
 I think the Go language, typechecking, compile-time checks, standard library, package manager and simplicity makes it perfect starting point for nice configuration management tool.
+
+## Docs
+
+#### SUDO
+
+Gossh building blocks allows commands and rules to run as other users. It is done using Sudo.
 
 ## References
 

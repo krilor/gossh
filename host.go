@@ -6,12 +6,59 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/pkg/errors"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 )
+
+// runner is the interface for running arbritrary shell commands
+// used for implementing different kinds of hosts, such as localhost, ssh, docker, remote docker
+type runner interface {
+	run(cmd string, stdin string, sudo bool, user string, sudopass string) (Response, error)
+}
+
+// local is the runner for local tasks
+type local struct{}
+
+// run cmd
+// refs:
+// https://stackoverflow.com/a/30329351 - shell
+// https://stackoverflow.com/a/24095983 - sudo
+// https://stackoverflow.com/a/55055100 - exit status
+func (l *local) run(cmd string, stdin string, sudo bool, user string, sudopass string) (Response, error) {
+
+	r := Response{}
+	var command *exec.Cmd
+	if sudo {
+		// -k is used to reset previous sudo timestamps
+		// -S reads password from stdin
+		// -u sets the user
+		// -E preserve user environment when running command
+		command = exec.Command("sudo", "-kSE", "-u", user, "bash", "-c", cmd)
+		command.Stdin = strings.NewReader(sudopass + "\n" + stdin + "\n")
+	} else {
+		command = exec.Command("bash", "-c", cmd)
+		command.Stdin = strings.NewReader(stdin + "\n")
+	}
+	command.Stdout = &r.Stdout
+	command.Stderr = &r.Stderr
+
+	err := command.Run()
+
+	if err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			r.ExitStatus = exitError.ExitCode()
+		} else {
+			r.ExitStatus = -1
+			return r, errors.Wrapf(err, "could not run command \"%s\"", cmd)
+		}
+	}
+
+	return r, nil
+}
 
 // Host is a remote host one is trying to connect
 type Host struct {
