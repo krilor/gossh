@@ -26,7 +26,7 @@ func main() {
 
 	// Add a host to the inventory
 	// As of now, it's hardcoded to a docker container on localhost
-	m, err := gossh.NewHost("localhost", 2222, "gossh", "gosshpwd")
+	m, err := gossh.NewRemoteHost("localhost", 2222, "gossh", "gosshpwd")
 	if err != nil {
 		fmt.Printf("could not get new host %v: %v\n", m, err)
 		return

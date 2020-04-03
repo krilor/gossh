@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/user"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -17,18 +18,34 @@ import (
 // runner is the interface for running arbritrary shell commands
 // used for implementing different kinds of hosts, such as localhost, ssh, docker, remote docker
 type runner interface {
-	run(cmd string, stdin string, sudo bool, user string, sudopass string) (Response, error)
+	user() string
+	run(cmd string, stdin string, sudo bool, user string) (Response, error)
 }
 
 // local is the runner for local tasks
-type local struct{}
+type local struct {
+	sudopass string
+	usr      string
+}
+
+func (l *local) String() string {
+	return "localhost"
+}
+
+func (l *local) user() string {
+	if l.usr == "" {
+		u, _ := user.Current()
+		l.usr = u.Username
+	}
+	return l.usr
+}
 
 // run cmd
 // refs:
 // https://stackoverflow.com/a/30329351 - shell
 // https://stackoverflow.com/a/24095983 - sudo
 // https://stackoverflow.com/a/55055100 - exit status
-func (l *local) run(cmd string, stdin string, sudo bool, user string, sudopass string) (Response, error) {
+func (l *local) run(cmd string, stdin string, sudo bool, user string) (Response, error) {
 
 	r := Response{}
 	var command *exec.Cmd
@@ -38,7 +55,7 @@ func (l *local) run(cmd string, stdin string, sudo bool, user string, sudopass s
 		// -u sets the user
 		// -E preserve user environment when running command
 		command = exec.Command("sudo", "-kSE", "-u", user, "bash", "-c", cmd)
-		command.Stdin = strings.NewReader(sudopass + "\n" + stdin + "\n")
+		command.Stdin = strings.NewReader(l.sudopass + "\n" + stdin + "\n")
 	} else {
 		command = exec.Command("bash", "-c", cmd)
 		command.Stdin = strings.NewReader(stdin + "\n")
@@ -60,27 +77,30 @@ func (l *local) run(cmd string, stdin string, sudo bool, user string, sudopass s
 	return r, nil
 }
 
-// Host is a remote host one is trying to connect
-type Host struct {
+type remote struct {
 	client   *ssh.Client
 	addr     string
 	port     int
-	user     string
+	usr      string
 	sudopass string
-
-	// Validate is used to indicate if the host only allows RunQuery, that does not alter the state of the system
-	Validate bool
 }
 
-// NewHost returns a Host based on address, port and user
-// It will connect to the SSH agent to get any ssh keys
-func NewHost(addr string, port int, user string, sudopass string) (*Host, error) {
-	h := Host{
+func (r *remote) user() string {
+	return r.usr
+}
+
+func (r *remote) String() string {
+	return fmt.Sprintf("%s@%s:%d", r.usr, r.addr, r.port)
+}
+
+func newRemote(addr string, port int, user string, sudopass string) (*remote, error) {
+	r := remote{
 		addr:     addr,
 		port:     port,
-		user:     user,
+		usr:      user,
 		sudopass: sudopass,
 	}
+
 	var err error
 
 	a, err := getAgentAuths()
@@ -97,22 +117,93 @@ func NewHost(addr string, port int, user string, sudopass string) (*Host, error)
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO
 	}
 
-	h.client, err = ssh.Dial("tcp", fmt.Sprintf("%s:%d", addr, port), &cc)
+	r.client, err = ssh.Dial("tcp", fmt.Sprintf("%s:%d", addr, port), &cc)
 	if err != nil {
-		return &h, errors.Wrapf(err, "unable to establish connection to %s:%d", addr, port)
+		return &r, errors.Wrapf(err, "unable to establish connection to %s:%d", addr, port)
 	}
 
-	return &h, nil
+	return &r, nil
+
+}
+
+// run runs cmd on remote
+func (r *remote) run(cmd string, stdin string, sudo bool, user string) (Response, error) {
+
+	session, err := r.client.NewSession()
+	resp := Response{}
+
+	if err != nil {
+		return resp, errors.Wrap(err, "unable to create new session")
+	}
+	defer session.Close()
+
+	session.Stdout = &resp.Stdout
+	session.Stderr = &resp.Stderr
+
+	// TODO - consider using session.Shell - http://networkbit.ch/golang-ssh-client/#multiple_commands
+	if sudo {
+		session.Stdin = strings.NewReader(r.sudopass + "\n" + stdin + "\n")
+		if user == "" || user == "-" {
+			user = "root"
+		}
+		sudocmd := fmt.Sprintf("sudo -S -u %s bash -c '%s'", user, cmd)
+		err = session.Run(sudocmd)
+
+	} else {
+		session.Stdin = strings.NewReader(stdin + "\n")
+		err = session.Run(cmd)
+	}
+
+	if err != nil {
+
+		switch t := err.(type) {
+		case *ssh.ExitError:
+			resp.ExitStatus = t.Waitmsg.ExitStatus()
+		case *ssh.ExitMissingError:
+			resp.ExitStatus = -1
+		default:
+			return resp, errors.Wrap(err, "run of command failed")
+		}
+
+	} else {
+		resp.ExitStatus = 0
+	}
+
+	return resp, nil
+}
+
+// Host is a remote host one is trying to connect
+type Host struct {
+	r runner
+	// Validate is used to indicate if the host only allows RunQuery, that does not alter the state of the system
+	Validate bool
+}
+
+// NewRemoteHost returns a Host based on address, port and user
+// It will connect to the SSH agent to get any ssh keys
+func NewRemoteHost(addr string, port int, user string, sudopass string) (*Host, error) {
+	r, err := newRemote(addr, port, user, sudopass)
+
+	if err != nil {
+		return &Host{}, err
+	}
+
+	return &Host{r, false}, nil
+}
+
+// NewLocalHost resturns a host that represents a local host
+func NewLocalHost() *Host {
+	return &Host{&local{}, false}
 }
 
 // String implements io.Stringer for a Host
 func (h *Host) String() string {
-	return fmt.Sprintf("%s@%s:%d", h.user, h.addr, h.port)
+	return fmt.Sprintf("%v", h.r)
 }
 
 // isReady reports if h is ready, i.e. if it has been initialized using New()
 func (h *Host) isReady() bool {
-	return h.client != nil
+	return h.r != nil
 }
 
 // Log is logging
@@ -131,17 +222,39 @@ func (h *Host) RunChange(trace Trace, cmd string, user string) (Response, error)
 			ExitStatus: BlockedByValidate,
 		}, nil
 	}
-	return h.run(trace, cmd, user)
+
+	sudo := false
+
+	if user == "-" {
+		user = "root"
+	}
+
+	if user != "" && user != h.r.user() {
+		sudo = true
+	}
+
+	return h.run(trace, cmd, "", sudo, user) // TODO STDIN
 }
 
 // RunQuery are used to run cmd's that doet not modify anything on m
 func (h *Host) RunQuery(trace Trace, cmd string, user string) (Response, error) {
 	h.Log(trace, "runquery", "invoked")
-	return h.run(trace, cmd, user)
+
+	sudo := false
+
+	if user == "-" {
+		user = "root"
+	}
+
+	if user != "" && user != h.r.user() {
+		sudo = true
+	}
+
+	return h.run(trace, cmd, "", sudo, user) // TODO STDIN
 }
 
 // Run runs cmd on host, as sudo or not, and returns the response
-func (h *Host) run(trace Trace, cmd string, user string) (Response, error) {
+func (h *Host) run(trace Trace, cmd string, stdin string, sudo bool, user string) (Response, error) {
 
 	trace = trace.Span()
 	h.Log(trace, "run", "start")
@@ -151,49 +264,13 @@ func (h *Host) run(trace Trace, cmd string, user string) (Response, error) {
 	h.Log(trace, "sudo", fmt.Sprintf("%v", user))
 
 	if !h.isReady() {
-		return Response{}, errors.New("hosts must be initialized using gossh.NewHost()")
+		return Response{}, errors.New("hosts not initialized. use New*Host")
 	}
 
-	session, err := h.client.NewSession()
-	r := Response{}
+	r, err := h.r.run(cmd, stdin, sudo, user)
 
 	if err != nil {
-		return r, errors.Wrap(err, "unable to create new session")
-	}
-	defer session.Close()
-
-	h.Log(trace, "session", "ready")
-
-	session.Stdout = &r.Stdout
-	session.Stderr = &r.Stderr
-
-	if user != "" && user != h.user {
-
-		session.Stdin = strings.NewReader(h.sudopass + "\n")
-		sudocmd := fmt.Sprintf("sudo -S -u %s %s", user, cmd)
-		h.Log(trace, "run", sudocmd)
-		err = session.Run(sudocmd)
-
-	} else {
-
-		h.Log(trace, "run", cmd)
-		err = session.Run(cmd)
-
-	}
-
-	if err != nil {
-
-		switch t := err.(type) {
-		case *ssh.ExitError:
-			r.ExitStatus = t.Waitmsg.ExitStatus()
-		case *ssh.ExitMissingError:
-			r.ExitStatus = -1
-		default:
-			return r, errors.Wrap(err, "run of command failed")
-		}
-
-	} else {
-		r.ExitStatus = 0
+		return r, err
 	}
 
 	h.Log(trace, "stdout", r.Stdout.String())

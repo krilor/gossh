@@ -21,7 +21,7 @@ RUN echo 'root:rootpwd' | chpasswd
 RUN echo 'gossh:gosshpwd' | chpasswd
 RUN echo 'hobgob:hobgobpwd' | chpasswd
 
-RUN echo -e "#!/usr/bin/env bash\nset -e\n/usr/sbin/sshd -D"> /run.sh
+RUN echo "#!/usr/bin/env bash\nset -e\n/usr/sbin/sshd -D"> /run.sh
 RUN chmod +x /run.sh
 
 EXPOSE 22
