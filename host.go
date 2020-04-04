@@ -155,7 +155,7 @@ func (r *remote) run(cmd string, stdin string, sudo bool, user string) (Response
 		if user == "" || user == "-" {
 			user = "root"
 		}
-		sudocmd := fmt.Sprintf("sudo -k -S -u %s bash -c '%s'", user, cmd)
+		sudocmd := fmt.Sprintf(`sudo -k -S -u %s bash -c "%s"`, user, cmd)
 		err = session.Run(sudocmd)
 
 	} else {

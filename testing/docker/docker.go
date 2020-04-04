@@ -6,9 +6,11 @@ import (
 	"net"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/lithammer/shortuuid"
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/ssh"
 )
 
 // Package docker provides functionality to create throwaway docker containers in test
@@ -78,14 +80,13 @@ func (c *Container) Port() int {
 	return c.port
 }
 
-// New creates runs a docker container with ssh enabled
-// Returns generated ID and port
-func New() (*Container, error) {
+// New creates runs a docker container with ssh enabled.
+func New(image Image) (*Container, error) {
 
 	c := Container{}
 
-	cmd := exec.Command("docker", "build", "-t", "gossh_throwaway_ubuntu", "-")
-	cmd.Stdin = strings.NewReader(string(dockerFileUbuntu))
+	cmd := exec.Command("docker", "build", "-t", image.Name(), "-")
+	cmd.Stdin = strings.NewReader(string(image.Dockerfile()))
 	b, err := cmd.CombinedOutput()
 
 	if err != nil {
@@ -98,12 +99,31 @@ func New() (*Container, error) {
 		return &c, errors.Wrap(err, "could not get free port")
 	}
 
-	cmd = exec.Command("docker", "run", "-d", "--rm", "--name", c.name, "-p", fmt.Sprintf("%d:22", c.port), "gossh_throwaway_ubuntu")
+	cmd = exec.Command("docker", "run", "-d", "--rm", "--name", c.name, "-p", fmt.Sprintf("%d:22", c.port), image.Name())
 	b, err = cmd.CombinedOutput()
 
 	if err != nil {
 		return &c, errors.Wrapf(err, "could not run throwaway container %s on port %d: %s", c.name, c.port, string(b))
 	}
 
-	return &c, nil
+	cc := ssh.ClientConfig{
+		User: "gossh",
+		Auth: []ssh.AuthMethod{
+			ssh.Password("gosshpwd"),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+	// This is to wait for sshd to be ready to accept connections
+	for i := 0; i < 6; i++ {
+		time.Sleep(time.Duration(int(time.Millisecond) * 150 * i))
+
+		client, err := ssh.Dial("tcp", fmt.Sprintf(":%d", c.port), &cc)
+
+		if err == nil {
+			client.Close()
+			break
+		}
+	}
+
+	return &c, err
 }
