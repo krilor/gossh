@@ -146,7 +146,7 @@ func (r *remote) run(cmd string, stdin string, sudo bool, user string) (Response
 		if user == "" || user == "-" {
 			user = "root"
 		}
-		sudocmd := fmt.Sprintf("sudo -S -u %s bash -c '%s'", user, cmd)
+		sudocmd := fmt.Sprintf("sudo -k S -u %s bash -c '%s'", user, cmd)
 		err = session.Run(sudocmd)
 
 	} else {
@@ -212,7 +212,7 @@ func (h *Host) Log(trace Trace, msg string, keyAndValues ...string) {
 }
 
 // RunChange are used to run cmd's that RunChanges the state on m
-func (h *Host) RunChange(trace Trace, cmd string, user string) (Response, error) {
+func (h *Host) RunChange(trace Trace, cmd string, stdin string, user string) (Response, error) {
 	h.Log(trace, "runchange", "invoked")
 	if h.Validate {
 		h.Log(trace, "runchange", "blocked by validate")
@@ -233,11 +233,11 @@ func (h *Host) RunChange(trace Trace, cmd string, user string) (Response, error)
 		sudo = true
 	}
 
-	return h.run(trace, cmd, "", sudo, user) // TODO STDIN
+	return h.run(trace, cmd, stdin, sudo, user) // TODO STDIN
 }
 
 // RunQuery are used to run cmd's that doet not modify anything on m
-func (h *Host) RunQuery(trace Trace, cmd string, user string) (Response, error) {
+func (h *Host) RunQuery(trace Trace, cmd string, stdin string, user string) (Response, error) {
 	h.Log(trace, "runquery", "invoked")
 
 	sudo := false
@@ -250,7 +250,7 @@ func (h *Host) RunQuery(trace Trace, cmd string, user string) (Response, error) 
 		sudo = true
 	}
 
-	return h.run(trace, cmd, "", sudo, user) // TODO STDIN
+	return h.run(trace, cmd, stdin, sudo, user) // TODO STDIN
 }
 
 // Run runs cmd on host, as sudo or not, and returns the response

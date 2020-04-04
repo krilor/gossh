@@ -65,7 +65,7 @@ func main() {
 	bootstrap.Add(base.Meta{
 		CheckFunc: func(trace gossh.Trace, t gossh.Target) (bool, error) {
 			cmd := fmt.Sprintf("ls -1 /tmp | grep %s", filename)
-			r, err := t.RunQuery(trace, cmd, "")
+			r, err := t.RunQuery(trace, cmd, "", "")
 			if err != nil {
 				return false, errors.Wrap(err, "could not check for somefile")
 			}

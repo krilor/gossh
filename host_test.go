@@ -15,7 +15,7 @@ var sudopass string
 var currentuser string
 
 func init() {
-	sudopass = os.Getenv("SUDOPASS")
+	sudopass = os.Getenv("SUDOPASS") // TODO - This is probably not a good idea
 	if sudopass == "" {
 		fmt.Println("###### Remember to set the env var SUDOPASS using \" export SUDOPASS=pwd\"")
 	}

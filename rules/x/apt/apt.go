@@ -31,7 +31,7 @@ type Package struct {
 func (p Package) Check(trace gossh.Trace, t gossh.Target) (bool, error) {
 	cmd := fmt.Sprintf(`dpkg-query -f '${Package}\t${db:Status-Abbrev}\t${Version}\t${Name}' -W %s`, p.Name)
 
-	r, err := t.RunQuery(trace, cmd, p.User)
+	r, err := t.RunQuery(trace, cmd, "", p.User)
 
 	if err != nil {
 		return false, errors.Wrapf(err, "could not check package status for %s", p.Name)
@@ -61,7 +61,7 @@ func (p Package) Ensure(trace gossh.Trace, t gossh.Target) error {
 
 	cmd := fmt.Sprintf("apt %s -y %s", actions[p.Status], p.Name)
 
-	r, err := t.RunChange(trace, cmd, p.User)
+	r, err := t.RunChange(trace, cmd, "", p.User)
 
 	if err != nil || !r.ExitStatusSuccess() {
 		return errors.Wrapf(err, "could not %s package %s", actions[p.Status], p.Name)

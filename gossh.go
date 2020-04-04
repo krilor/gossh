@@ -21,7 +21,7 @@ type Target interface {
 	//
 	// Target will use sudo to change to user if it is not the connected user.
 	// If user is an empty string, the connected user will be used.
-	RunChange(trace Trace, cmd string, user string) (Response, error)
+	RunChange(trace Trace, cmd string, stdin string, user string) (Response, error)
 
 	// RunQuery runs the command cmd on the Target.
 	//
@@ -29,7 +29,7 @@ type Target interface {
 	//
 	// Target will use sudo to change to user if it is not the connected user.
 	// If user is an empty string, the connected user will be used.
-	RunQuery(trace Trace, cmd string, user string) (Response, error)
+	RunQuery(trace Trace, cmd string, stdin string, user string) (Response, error)
 
 	// Log can be used by clients to surface info-type logs.
 	//""

@@ -18,7 +18,7 @@ func (e Exists) Check(trace gossh.Trace, t gossh.Target) (bool, error) {
 
 	cmd := fmt.Sprintf("stat %s", e.Path)
 
-	r, err := t.RunQuery(trace, cmd, e.User)
+	r, err := t.RunQuery(trace, cmd, "", e.User)
 
 	if err != nil {
 		return false, errors.Wrap(err, "stat errored")
@@ -35,7 +35,7 @@ func (e Exists) Check(trace gossh.Trace, t gossh.Target) (bool, error) {
 func (e Exists) Ensure(trace gossh.Trace, t gossh.Target) error {
 
 	cmd := fmt.Sprintf("touch %s", e.Path)
-	r, err := t.RunChange(trace, cmd, e.User)
+	r, err := t.RunChange(trace, cmd, "", e.User)
 
 	if err != nil {
 		return errors.Wrap(err, "could not ensure file")

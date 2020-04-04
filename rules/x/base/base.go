@@ -18,7 +18,7 @@ type Cmd struct {
 
 // Check will pass if Cmd's CheckCmd return ExitStatus equals 0
 func (c Cmd) Check(trace gossh.Trace, t gossh.Target) (bool, error) {
-	r, err := t.RunQuery(trace, c.CheckCmd, c.User)
+	r, err := t.RunQuery(trace, c.CheckCmd, "", c.User)
 
 	if err != nil {
 		return false, errors.Wrapf(err, "command %s failed", c.CheckCmd)
@@ -29,7 +29,7 @@ func (c Cmd) Check(trace gossh.Trace, t gossh.Target) (bool, error) {
 
 // Ensure simply runs Cmd's EnsureCmd
 func (c Cmd) Ensure(trace gossh.Trace, t gossh.Target) error {
-	r, err := t.RunChange(trace, c.EnsureCmd, c.User)
+	r, err := t.RunChange(trace, c.EnsureCmd, "", c.User)
 
 	if err != nil || !r.ExitStatusSuccess() {
 		return errors.Wrapf(err, "command %s failed", c.EnsureCmd)
