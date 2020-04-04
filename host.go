@@ -60,10 +60,16 @@ func (l *local) run(cmd string, stdin string, sudo bool, user string) (Response,
 		command = exec.Command("bash", "-c", cmd)
 		command.Stdin = strings.NewReader(stdin + "\n")
 	}
-	command.Stdout = &r.Stdout
-	command.Stderr = &r.Stderr
+	o := bytes.Buffer{}
+	e := bytes.Buffer{}
+
+	command.Stdout = &o
+	command.Stderr = &e
 
 	err := command.Run()
+
+	r.Stdout = scrubStd(o.String())
+	r.Stderr = scrubStd(e.String())
 
 	if err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
@@ -137,8 +143,11 @@ func (r *remote) run(cmd string, stdin string, sudo bool, user string) (Response
 	}
 	defer session.Close()
 
-	session.Stdout = &resp.Stdout
-	session.Stderr = &resp.Stderr
+	o := bytes.Buffer{}
+	e := bytes.Buffer{}
+
+	session.Stdout = &o
+	session.Stderr = &e
 
 	// TODO - consider using session.Shell - http://networkbit.ch/golang-ssh-client/#multiple_commands
 	if sudo {
@@ -146,13 +155,16 @@ func (r *remote) run(cmd string, stdin string, sudo bool, user string) (Response
 		if user == "" || user == "-" {
 			user = "root"
 		}
-		sudocmd := fmt.Sprintf("sudo -k S -u %s bash -c '%s'", user, cmd)
+		sudocmd := fmt.Sprintf("sudo -k -S -u %s bash -c '%s'", user, cmd)
 		err = session.Run(sudocmd)
 
 	} else {
 		session.Stdin = strings.NewReader(stdin + "\n")
 		err = session.Run(cmd)
 	}
+
+	resp.Stdout = scrubStd(o.String())
+	resp.Stderr = scrubStd(e.String())
 
 	if err != nil {
 
@@ -216,11 +228,7 @@ func (h *Host) RunChange(trace Trace, cmd string, stdin string, user string) (Re
 	h.Log(trace, "runchange", "invoked")
 	if h.Validate {
 		h.Log(trace, "runchange", "blocked by validate")
-		return Response{
-			Stdout:     *bytes.NewBuffer([]byte{}),
-			Stderr:     *bytes.NewBuffer([]byte{}),
-			ExitStatus: BlockedByValidate,
-		}, nil
+		return Response{ExitStatus: BlockedByValidate}, nil
 	}
 
 	sudo := false
@@ -273,8 +281,8 @@ func (h *Host) run(trace Trace, cmd string, stdin string, sudo bool, user string
 		return r, err
 	}
 
-	h.Log(trace, "stdout", r.Stdout.String())
-	h.Log(trace, "stderr", r.Stderr.String())
+	h.Log(trace, "stdout", r.Stdout)
+	h.Log(trace, "stderr", r.Stderr)
 	h.Log(trace, "exitstatus", fmt.Sprintf("%d", r.ExitStatus))
 
 	return r, nil

@@ -1,7 +1,6 @@
 package gossh
 
 import (
-	"bytes"
 	"fmt"
 	"log"
 	"os"
@@ -65,32 +64,32 @@ func TestLocal(t *testing.T) {
 		{
 			cmd: `echo "hello"`,
 			expect: Response{
-				Stdout:     *bytes.NewBufferString("hello\n"),
-				Stderr:     *bytes.NewBufferString(""),
+				Stdout:     "hello",
+				Stderr:     "",
 				ExitStatus: 0,
 			},
 		},
 		{
 			cmd: `echo -n "hello"`,
 			expect: Response{
-				Stdout:     *bytes.NewBufferString("hello"),
-				Stderr:     *bytes.NewBufferString(""),
+				Stdout:     "hello",
+				Stderr:     "",
 				ExitStatus: 0,
 			},
 		},
 		{
 			cmd: `somecommandthatdoesnotexist`,
 			expect: Response{
-				Stdout:     *bytes.NewBufferString(""),
-				Stderr:     *bytes.NewBufferString("bash: somecommandthatdoesnotexist: command not found\n"),
+				Stdout:     "",
+				Stderr:     "bash: somecommandthatdoesnotexist: command not found",
 				ExitStatus: 127,
 			},
 		},
 		{
 			cmd: `cat filethatdoesntexist`,
 			expect: Response{
-				Stdout:     *bytes.NewBufferString(""),
-				Stderr:     *bytes.NewBufferString("cat: filethatdoesntexist: No such file or directory\n"),
+				Stdout:     "",
+				Stderr:     "cat: filethatdoesntexist: No such file or directory",
 				ExitStatus: 1,
 			},
 		},
@@ -98,8 +97,8 @@ func TestLocal(t *testing.T) {
 			cmd:   `sed s/a/X/ | sed s/c/Z/`,
 			stdin: "abc",
 			expect: Response{
-				Stdout:     *bytes.NewBufferString("XbZ\n"),
-				Stderr:     *bytes.NewBufferString(""),
+				Stdout:     "XbZ",
+				Stderr:     "",
 				ExitStatus: 0,
 			},
 		},
@@ -109,8 +108,8 @@ func TestLocal(t *testing.T) {
 			user:  "root",
 			stdin: "abc",
 			expect: Response{
-				Stdout:     *bytes.NewBufferString("XbZ\n"),
-				Stderr:     *bytes.NewBufferString("[sudo] password for " + currentuser + ": "),
+				Stdout:     "XbZ",
+				Stderr:     "",
 				ExitStatus: 0,
 			},
 		},
@@ -118,8 +117,8 @@ func TestLocal(t *testing.T) {
 			cmd:  `ls /root`,
 			sudo: true,
 			expect: Response{
-				Stdout:     *bytes.NewBufferString(""),
-				Stderr:     *bytes.NewBufferString("[sudo] password for " + currentuser + ": "),
+				Stdout:     "",
+				Stderr:     "",
 				ExitStatus: 0,
 			},
 		},
@@ -133,11 +132,11 @@ func TestLocal(t *testing.T) {
 				t.Errorf("errored: %v", err)
 			}
 
-			if got.Stdout.String() != test.expect.Stdout.String() {
-				t.Errorf("stdout: got \"%s\" - expect \"%s\"", got.Stdout.String(), test.expect.Stdout.String())
+			if got.Stdout != test.expect.Stdout {
+				t.Errorf("stdout: got \"%s\" - expect \"%s\"", got.Stdout, test.expect.Stdout)
 			}
-			if got.Stderr.String() != test.expect.Stderr.String() {
-				t.Errorf("stderr: got \"%s\" - expect \"%s\"", got.Stderr.String(), test.expect.Stderr.String())
+			if got.Stderr != test.expect.Stderr {
+				t.Errorf("stderr: got \"%s\" - expect \"%s\"", got.Stderr, test.expect.Stderr)
 			}
 			if got.ExitStatus != test.expect.ExitStatus {
 				t.Errorf("exitstatus: got \"%d\" - expect \"%d\"", got.ExitStatus, test.expect.ExitStatus)
@@ -171,32 +170,32 @@ func TestRemote(t *testing.T) {
 		{
 			cmd: `echo "hello"`,
 			expect: Response{
-				Stdout:     *bytes.NewBufferString("hello\n"),
-				Stderr:     *bytes.NewBufferString(""),
+				Stdout:     "hello",
+				Stderr:     "",
 				ExitStatus: 0,
 			},
 		},
 		{
 			cmd: `echo -n "hello"`,
 			expect: Response{
-				Stdout:     *bytes.NewBufferString("hello"),
-				Stderr:     *bytes.NewBufferString(""),
+				Stdout:     "hello",
+				Stderr:     "",
 				ExitStatus: 0,
 			},
 		},
 		{
 			cmd: `somecommandthatdoesnotexist`,
 			expect: Response{
-				Stdout:     *bytes.NewBufferString(""),
-				Stderr:     *bytes.NewBufferString("bash: somecommandthatdoesnotexist: command not found\n"),
+				Stdout:     "",
+				Stderr:     "bash: somecommandthatdoesnotexist: command not found",
 				ExitStatus: 127,
 			},
 		},
 		{
 			cmd: `cat filethatdoesntexist`,
 			expect: Response{
-				Stdout:     *bytes.NewBufferString(""),
-				Stderr:     *bytes.NewBufferString("cat: filethatdoesntexist: No such file or directory\n"),
+				Stdout:     "",
+				Stderr:     "cat: filethatdoesntexist: No such file or directory",
 				ExitStatus: 1,
 			},
 		},
@@ -204,8 +203,8 @@ func TestRemote(t *testing.T) {
 			cmd:   `sed s/a/X/ | sed s/c/Z/`,
 			stdin: "abc",
 			expect: Response{
-				Stdout:     *bytes.NewBufferString("XbZ\n"),
-				Stderr:     *bytes.NewBufferString(""),
+				Stdout:     "XbZ",
+				Stderr:     "",
 				ExitStatus: 0,
 			},
 		},
@@ -215,8 +214,8 @@ func TestRemote(t *testing.T) {
 			user:  "root",
 			stdin: "abc",
 			expect: Response{
-				Stdout:     *bytes.NewBufferString("XbZ\n"),
-				Stderr:     *bytes.NewBufferString("[sudo] password for " + r.user() + ": "),
+				Stdout:     "XbZ",
+				Stderr:     "",
 				ExitStatus: 0,
 			},
 		},
@@ -224,8 +223,8 @@ func TestRemote(t *testing.T) {
 			cmd:  `ls /root`,
 			sudo: true,
 			expect: Response{
-				Stdout:     *bytes.NewBufferString(""),
-				Stderr:     *bytes.NewBufferString("[sudo] password for " + r.user() + ": "),
+				Stdout:     "",
+				Stderr:     "",
 				ExitStatus: 0,
 			},
 		},
@@ -233,8 +232,8 @@ func TestRemote(t *testing.T) {
 			cmd:  `echo 'test' | sed s/t/b/`,
 			sudo: true,
 			expect: Response{
-				Stdout:     *bytes.NewBufferString("best\n"),
-				Stderr:     *bytes.NewBufferString("[sudo] password for " + r.user() + ": "),
+				Stdout:     "best",
+				Stderr:     "",
 				ExitStatus: 0,
 			},
 		},
@@ -248,11 +247,11 @@ func TestRemote(t *testing.T) {
 				t.Errorf("errored: %v", err)
 			}
 
-			if got.Stdout.String() != test.expect.Stdout.String() {
-				t.Errorf("stdout: got \"%s\" - expect \"%s\"", got.Stdout.String(), test.expect.Stdout.String())
+			if got.Stdout != test.expect.Stdout {
+				t.Errorf("stdout: got \"%s\" - expect \"%s\"", got.Stdout, test.expect.Stdout)
 			}
-			if got.Stderr.String() != test.expect.Stderr.String() {
-				t.Errorf("stderr: got \"%s\" - expect \"%s\"", got.Stderr.String(), test.expect.Stderr.String())
+			if got.Stderr != test.expect.Stderr {
+				t.Errorf("stderr: got \"%s\" - expect \"%s\"", got.Stderr, test.expect.Stderr)
 			}
 			if got.ExitStatus != test.expect.ExitStatus {
 				t.Errorf("exitstatus: got \"%d\" - expect \"%d\"", got.ExitStatus, test.expect.ExitStatus)

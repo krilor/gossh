@@ -42,7 +42,7 @@ func (p Package) Check(trace gossh.Trace, t gossh.Target) (bool, error) {
 	}
 
 	// at this point, the package info has been returned, so we need to do some string-fiddling to get the status byte
-	status := strings.Split(r.Stdout.String(), "\t")[1][1]
+	status := strings.Split(r.Stdout, "\t")[1][1]
 
 	if status != byte(p.Status) {
 		return false, nil
