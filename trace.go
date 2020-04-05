@@ -3,29 +3,29 @@ package gossh
 import "github.com/lithammer/shortuuid"
 
 // Trace is a type used to trace Apply and Run on Hosts
-type Trace struct {
+type trace struct {
 	id    string
 	prev  string
 	level int
 }
 
 // String implements fmt.Stringer
-func (t Trace) String() string {
+func (t trace) String() string {
 	return t.id
 }
 
-// Span gets a new random ID and creates a span within that
-func (t Trace) Span() Trace {
+// span gets a new random ID and creates a span within that
+func (t trace) span() trace {
 	t.prev = t.id
 	t.id = newUniqueID()
 	t.level = t.level + 1
 	return t
 }
 
-// NewTrace returns a new trace with id as the first element
+// newTrace returns a new trace with id as the first element
 // If id is an empty string, then a new id is generated
-func NewTrace() Trace {
-	return Trace{
+func newTrace() trace {
+	return trace{
 		id:   newUniqueID(),
 		prev: "",
 	}

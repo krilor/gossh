@@ -189,6 +189,7 @@ type Host struct {
 	r runner
 	// Validate is used to indicate if the host only allows RunQuery, that does not alter the state of the system
 	Validate bool
+	t        trace
 }
 
 // NewRemoteHost returns a Host based on address, port and user
@@ -200,12 +201,12 @@ func NewRemoteHost(addr string, port int, user string, sudopass string) (*Host, 
 		return &Host{}, err
 	}
 
-	return &Host{r, false}, nil
+	return &Host{r, false, newTrace()}, nil
 }
 
 // NewLocalHost resturns a host that represents a local host
 func NewLocalHost() *Host {
-	return &Host{&local{}, false}
+	return &Host{&local{}, false, newTrace()}
 }
 
 // String implements io.Stringer for a Host
@@ -218,16 +219,21 @@ func (h *Host) isReady() bool {
 	return h.r != nil
 }
 
+// AllowChange reports if the host will allow calls to RunChange
+func (h *Host) AllowChange() bool {
+	return !h.Validate
+}
+
 // Log is logging
-func (h *Host) Log(trace Trace, msg string, keyAndValues ...string) {
-	log.Println(h.String(), trace.id, trace.prev, msg, keyAndValues)
+func (h *Host) Log(msg string, keyAndValues ...string) {
+	log.Println(h.String(), h.t.id, h.t.prev, msg, keyAndValues)
 }
 
 // RunChange are used to run cmd's that RunChanges the state on m
-func (h *Host) RunChange(trace Trace, cmd string, stdin string, user string) (Response, error) {
-	h.Log(trace, "runchange", "invoked")
+func (h *Host) RunChange(cmd string, stdin string, user string) (Response, error) {
+	h.Log("runchange", "invoked")
 	if h.Validate {
-		h.Log(trace, "runchange", "blocked by validate")
+		h.Log("runchange", "blocked by validate")
 		return Response{ExitStatus: BlockedByValidate}, nil
 	}
 
@@ -241,12 +247,12 @@ func (h *Host) RunChange(trace Trace, cmd string, stdin string, user string) (Re
 		sudo = true
 	}
 
-	return h.run(trace, cmd, stdin, sudo, user) // TODO STDIN
+	return h.run(cmd, stdin, sudo, user)
 }
 
 // RunQuery are used to run cmd's that doet not modify anything on m
-func (h *Host) RunQuery(trace Trace, cmd string, stdin string, user string) (Response, error) {
-	h.Log(trace, "runquery", "invoked")
+func (h *Host) RunQuery(cmd string, stdin string, user string) (Response, error) {
+	h.Log("runquery", "invoked")
 
 	sudo := false
 
@@ -258,21 +264,21 @@ func (h *Host) RunQuery(trace Trace, cmd string, stdin string, user string) (Res
 		sudo = true
 	}
 
-	return h.run(trace, cmd, stdin, sudo, user) // TODO STDIN
+	return h.run(cmd, stdin, sudo, user)
 }
 
 // Run runs cmd on host, as sudo or not, and returns the response
-func (h *Host) run(trace Trace, cmd string, stdin string, sudo bool, user string) (Response, error) {
+func (h *Host) run(cmd string, stdin string, sudo bool, user string) (Response, error) {
 
-	trace = trace.Span()
-	h.Log(trace, "run", "start")
-	defer h.Log(trace, "run", "end")
+	h = h.fork()
+	h.Log("run", "start")
+	defer h.Log("run", "end")
 
-	h.Log(trace, "cmd", cmd)
-	h.Log(trace, "sudo", fmt.Sprintf("%v", user))
+	h.Log("cmd", cmd)
+	h.Log("sudo", fmt.Sprintf("%v", user))
 
 	if !h.isReady() {
-		return Response{}, errors.New("hosts not initialized. use New*Host")
+		return Response{}, errors.New("hosts not initialized. use New...Host")
 	}
 
 	r, err := h.r.run(cmd, stdin, sudo, user)
@@ -281,9 +287,9 @@ func (h *Host) run(trace Trace, cmd string, stdin string, sudo bool, user string
 		return r, err
 	}
 
-	h.Log(trace, "stdout", r.Stdout)
-	h.Log(trace, "stderr", r.Stderr)
-	h.Log(trace, "exitstatus", fmt.Sprintf("%d", r.ExitStatus))
+	h.Log("stdout", r.Stdout)
+	h.Log("stderr", r.Stderr)
+	h.Log("exitstatus", fmt.Sprintf("%d", r.ExitStatus))
 
 	return r, nil
 }
@@ -305,46 +311,34 @@ func nSpaces(n int) string {
 
 // Apply applies Rule r on m, i.e. runs Check and conditionally runs Ensure
 // Id must be unique string. //TODO - how to explain this
-// TODO - maybe use ... on r to allow specification of multiple rules at once
-func (h *Host) Apply(trace Trace, name string, r Rule) error {
+func (h *Host) Apply(name string, r Rule) (Status, error) {
+	// TODO - maybe use ... on r to allow specification of multiple rules at once
 
-	h.Log(trace, "apply", "name", name)
+	h.Log("apply", "name", name)
 
-	trace = trace.Span()
-	fmt.Printf("%s┌ %s %s\n", nSpaces(trace.level), name, "Start")
+	fmt.Printf("%s┌ %s %s\n", nSpaces(h.t.level), name, "Start")
 
-	h.Log(trace, "apply", "start")
-	defer h.Log(trace, "apply", "end")
+	h.Log("apply", "start")
+	defer h.Log("apply", "end")
 
-	span := trace.Span()
-	h.Log(span, "check", "start")
-	ok, err := r.Check(span, h)
-	h.Log(span, "check", "end")
+	h.Log("ensure", "start")
+	status, err := r.Ensure(h)
+	h.Log("ensure", "end")
 
 	if err != nil {
-		fmt.Printf("%s└ %s %s: %v\n", nSpaces(trace.level), name, "ERROR", err)
-		return errors.Wrapf(err, "could not check rule %v on machinve %v", r, h)
+		fmt.Printf("%s└ %s %s\n", nSpaces(h.t.level), name, "CHANGED")
+		return StatusFailed, errors.Wrapf(err, "could not ensure rule %v on host %v", r, h)
 	}
 
-	if ok {
-		fmt.Printf("%s└ %s %s\n", nSpaces(trace.level), name, "OK")
-		return nil
-	}
+	fmt.Printf("%s└ %s %s\n", nSpaces(h.t.level), name, "OK")
+	return status, nil
+}
 
-	h.Log(trace, "check", fmt.Sprintf("%v", ok))
-
-	span = trace.Span()
-	h.Log(span, "ensure", "start")
-	err = r.Ensure(span, h)
-	h.Log(span, "ensure", "end")
-
-	if err != nil {
-		fmt.Printf("%s└ %s %s\n", nSpaces(trace.level), name, "CHANGED")
-		return errors.Wrapf(err, "could not ensure rule %v on host %v", r, h)
-	}
-
-	fmt.Printf("%s└ %s %s\n", nSpaces(trace.level), name, "OK")
-	return nil
+// fork is in tracing to enable forking a host
+func (h *Host) fork() *Host {
+	new := *h
+	new.t = new.t.span()
+	return &new
 }
 
 // getAgentAuths is a helper function to get SSH keys from an ssh agent

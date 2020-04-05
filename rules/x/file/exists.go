@@ -13,12 +13,12 @@ type Exists struct {
 	User string
 }
 
-// Check if file exists
-func (e Exists) Check(trace gossh.Trace, t gossh.Target) (bool, error) {
+// check if file exists
+func (e Exists) check(t gossh.Target) (bool, error) {
 
 	cmd := fmt.Sprintf("stat %s", e.Path)
 
-	r, err := t.RunQuery(trace, cmd, "", e.User)
+	r, err := t.RunQuery(cmd, "", e.User)
 
 	if err != nil {
 		return false, errors.Wrap(err, "stat errored")
@@ -28,21 +28,27 @@ func (e Exists) Check(trace gossh.Trace, t gossh.Target) (bool, error) {
 		return false, nil
 	}
 
-	return true, nil
+	return false, nil
 }
 
 // Ensure that file exists
-func (e Exists) Ensure(trace gossh.Trace, t gossh.Target) error {
+func (e Exists) Ensure(t gossh.Target) (gossh.Status, error) {
+
+	ok, err := e.check(t)
+
+	if ok {
+		return gossh.StatusSatisfied, nil
+	}
 
 	cmd := fmt.Sprintf("touch %s", e.Path)
-	r, err := t.RunChange(trace, cmd, "", e.User)
+	r, err := t.RunChange(cmd, "", e.User)
 
 	if err != nil {
-		return errors.Wrap(err, "could not ensure file")
+		return gossh.StatusFailed, errors.Wrap(err, "could not ensure file")
 	}
 
-	if !r.ExitStatusSuccess() {
-		return errors.New("something went wrong with touch")
+	if !r.Success() {
+		return gossh.StatusFailed, errors.New("something went wrong with touch")
 	}
-	return nil
+	return gossh.StatusChanged, nil
 }

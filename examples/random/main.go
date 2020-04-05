@@ -44,7 +44,7 @@ func main() {
 
 	// apt.Package installs/uninstalls a apt package
 	bootstrap.Add(apt.Package{
-		Name:   "tree",
+		Name:   "libccdasdas98h9h",
 		Status: apt.StatusInstalled,
 	})
 
@@ -63,26 +63,24 @@ func main() {
 	filename := "somefile.txt"
 
 	bootstrap.Add(base.Meta{
-		CheckFunc: func(trace gossh.Trace, t gossh.Target) (bool, error) {
+		EnsureFunc: func(t gossh.Target) (gossh.Status, error) {
+
 			cmd := fmt.Sprintf("ls -1 /tmp | grep %s", filename)
-			r, err := t.RunQuery(trace, cmd, "", "")
+			r, err := t.RunQuery(cmd, "", "")
 			if err != nil {
-				return false, errors.Wrap(err, "could not check for somefile")
+				return gossh.StatusFailed, errors.Wrap(err, "could not check for somefile")
 			}
 			if r.ExitStatus == 0 {
-				return true, nil
+				return gossh.StatusSatisfied, nil
 			}
 
-			return false, nil
-		},
-		EnsureFunc: func(trace gossh.Trace, t gossh.Target) error {
-			return file.Exists{Path: "/tmp/" + filename}.Ensure(trace, m)
+			return m.Apply("file exists", file.Exists{Path: "/tmp/" + filename})
 		},
 	})
 
 	for _, m := range inventory {
 		log.Println("doing host", m)
-		err = m.Apply(gossh.NewTrace(), "bootstrap", bootstrap)
+		_, err = m.Apply("bootstrap", bootstrap)
 		if err != nil {
 			fmt.Println("apply of bootstrap gone wrong", err)
 		}

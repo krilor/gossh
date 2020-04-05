@@ -2,6 +2,38 @@ package gossh
 
 // Package gossh provides interfaces and functionality for declarative IT automation on remote hosts or containers.
 
+//go:generate stringer -type=Status
+
+// Status indicates the state of the rule.
+type Status int
+
+const (
+	// StatusUndefined is set as the zero-value. Should only be used when error is returned, but consider using Failed instead.
+	StatusUndefined Status = iota
+	// StatusSkipped means that the rule should be skipped.
+	// Useful only for conditional or os-specific rules
+	// Should not be returned if rules are checked ok. In that case, Statisfied should be returned.
+	StatusSkipped
+	// StatusSatisfied means rule was allready adhered to, i.e. check was OK.
+	StatusSatisfied
+	// StatusCheckNotOK means that a check was done, and it was not ok.
+	StatusCheckNotOK
+	// StatusChanged means that the rule Ensure ran, and exited with success.
+	StatusChanged
+	// StatusFailed means someting went wrong. Usually returned when error is also returned.
+	StatusFailed
+)
+
+// OK reports if the status should be considered as OK.
+// Returns true if status is one of
+// StatusSkipped,
+// StatusSatisfied,
+// StatusCheckNotOK,
+// StatusChanged
+func (s Status) OK() bool {
+	return s == StatusSkipped || s == StatusSatisfied || s == StatusCheckNotOK || s == StatusChanged
+}
+
 // Target is a target for commands and rules
 //
 // Targets can be in a validate state, that does not allow for commands that RunChange the state of the system to run.
@@ -9,7 +41,11 @@ type Target interface {
 	// Apply checks and ensures that the Target adheres to the rule r.
 	//
 	// String name should be unique within a rule, short and descriptive.
-	Apply(trace Trace, name string, r Rule) error
+	Apply(name string, r Rule) (Status, error)
+
+	// AllowChange reports if the machine allows changes to be done.
+	// It can be used by rule implementers in cases where it makes more sense than running RunQuery and getting blocked response.
+	AllowChange() bool
 
 	// RunChange runs the command cmd on the Target.
 	//
@@ -21,7 +57,7 @@ type Target interface {
 	//
 	// Target will use sudo to change to user if it is not the connected user.
 	// If user is an empty string, the connected user will be used.
-	RunChange(trace Trace, cmd string, stdin string, user string) (Response, error)
+	RunChange(cmd string, stdin string, user string) (Response, error)
 
 	// RunQuery runs the command cmd on the Target.
 	//
@@ -29,7 +65,7 @@ type Target interface {
 	//
 	// Target will use sudo to change to user if it is not the connected user.
 	// If user is an empty string, the connected user will be used.
-	RunQuery(trace Trace, cmd string, stdin string, user string) (Response, error)
+	RunQuery(cmd string, stdin string, user string) (Response, error)
 
 	// Log can be used by clients to surface info-type logs.
 	//""
@@ -41,28 +77,12 @@ type Target interface {
 	// the log line. The key/value pairs can then be used to add additional
 	// variable information.  The key/value pairs should RunChangenate string
 	// keys and values
-	Log(trace Trace, msg string, keysAndValues ...string)
+	Log(msg string, keysAndValues ...string)
 }
 
 // BlockedByValidate is an ExitCode used to indicate that the command was not run, but rather blocked because the target does not allow any modifications.
 // The intended use for this is when validating rules.
 const BlockedByValidate int = 81549300
-
-// Checker is the interface that wraps the Check method.
-//
-// Check runs commands on t to and reports to ok wether or not the rule is adhered to or not.
-// If anything goes wrong, error err is returned. Otherwise err is nil.
-type Checker interface {
-	Check(trace Trace, t Target) (ok bool, err error)
-}
-
-// Ensurer is the interface that wraps the Ensure method
-//
-// Ensure runs commands on t to ensure that a specified state is adhered to.
-// If anything goes wrong, error err is returned. Otherwise err is nil.
-type Ensurer interface {
-	Ensure(trace Trace, t Target) error
-}
 
 // Rule is the interface that groups the Check and Ensure methods
 //
@@ -70,6 +90,5 @@ type Ensurer interface {
 //
 // In go-speak, it should have been called a CheckEnsurer
 type Rule interface {
-	Checker
-	Ensurer
+	Ensure(t Target) (status Status, err error)
 }
