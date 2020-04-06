@@ -19,7 +19,7 @@ type Cmd struct {
 // Ensure simply runs Cmd's CheckCmd, then EnsureCmd
 func (c Cmd) Ensure(t gossh.Target) (gossh.Status, error) {
 
-	r, err := t.RunQuery(c.CheckCmd, "", c.User)
+	r, err := t.RunCheck(c.CheckCmd, "", c.User)
 
 	if err != nil {
 		return gossh.StatusFailed, errors.Wrapf(err, "command %s failed", c.CheckCmd)
@@ -35,7 +35,7 @@ func (c Cmd) Ensure(t gossh.Target) (gossh.Status, error) {
 		return gossh.StatusFailed, errors.Wrapf(err, "command %s failed", c.EnsureCmd)
 	}
 
-	return gossh.StatusChanged, nil
+	return gossh.StatusEnforced, nil
 }
 
 // Meta is a rule that can be used to write your own rules, on the fly

@@ -66,7 +66,7 @@ func main() {
 		EnsureFunc: func(t gossh.Target) (gossh.Status, error) {
 
 			cmd := fmt.Sprintf("ls -1 /tmp | grep %s", filename)
-			r, err := t.RunQuery(cmd, "", "")
+			r, err := t.RunCheck(cmd, "", "")
 			if err != nil {
 				return gossh.StatusFailed, errors.Wrap(err, "could not check for somefile")
 			}

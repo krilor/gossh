@@ -187,7 +187,7 @@ func (r *remote) run(cmd string, stdin string, sudo bool, user string) (Response
 // Host is a remote host one is trying to connect
 type Host struct {
 	r runner
-	// Validate is used to indicate if the host only allows RunQuery, that does not alter the state of the system
+	// Validate is used to indicate if the host only allows RunCheck, that does not alter the state of the system
 	Validate bool
 	t        trace
 }
@@ -250,9 +250,9 @@ func (h *Host) RunChange(cmd string, stdin string, user string) (Response, error
 	return h.run(cmd, stdin, sudo, user)
 }
 
-// RunQuery are used to run cmd's that doet not modify anything on m
-func (h *Host) RunQuery(cmd string, stdin string, user string) (Response, error) {
-	h.Log("runquery", "invoked")
+// RunCheck are used to run cmd's that doet not modify anything on m
+func (h *Host) RunCheck(cmd string, stdin string, user string) (Response, error) {
+	h.Log("runcheck", "invoked")
 
 	sudo := false
 

@@ -18,7 +18,7 @@ func (e Exists) check(t gossh.Target) (bool, error) {
 
 	cmd := fmt.Sprintf("stat %s", e.Path)
 
-	r, err := t.RunQuery(cmd, "", e.User)
+	r, err := t.RunCheck(cmd, "", e.User)
 
 	if err != nil {
 		return false, errors.Wrap(err, "stat errored")
@@ -50,5 +50,5 @@ func (e Exists) Ensure(t gossh.Target) (gossh.Status, error) {
 	if !r.Success() {
 		return gossh.StatusFailed, errors.New("something went wrong with touch")
 	}
-	return gossh.StatusChanged, nil
+	return gossh.StatusEnforced, nil
 }

@@ -32,7 +32,7 @@ func (p Package) check(t gossh.Target) (bool, error) {
 
 	cmd := fmt.Sprintf(`dpkg-query -f '${Package}\t${db:Status-Abbrev}\t${Version}\t${Name}' -W %s`, p.Name)
 
-	r, err := t.RunQuery(cmd, "", p.User)
+	r, err := t.RunCheck(cmd, "", p.User)
 
 	if err != nil {
 		return false, errors.Wrapf(err, "could not check package status for %s", p.Name)
@@ -78,5 +78,5 @@ func (p Package) Ensure(t gossh.Target) (gossh.Status, error) {
 		return gossh.StatusFailed, errors.Wrapf(err, "could not %s package %s", actions[p.Status], p.Name)
 	}
 
-	return gossh.StatusChanged, nil
+	return gossh.StatusEnforced, nil
 }

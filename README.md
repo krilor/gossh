@@ -17,9 +17,9 @@ The package has only a handful main concepts or building blocks.
 The base building block of the declarative mindset baked into this experiment is the notion of a [Rule](gossh.go).
 A rule is an interface with a single _Ensure_ function. Ensure does what it sounds like: _Ensure_ ensures the rule is adhered to on the target.
 
-Ensuring is a two-step process - _check_ and _change_. Change is only done if check is not ok.
+Ensuring is a two-step process - _check_ and _enforce_. Enforcement is only done if the check was not successful.
 
-An example of a rule is [apt.Package](rules/x/apt/apt.go). _Check_ verifies if the apt package is installed or not, and _change_ (un)installs the package.
+An example of a rule is [apt.Package](rules/x/apt/apt.go). _Check_ verifies if the apt package is installed or not, and _enforcement_ is done by (un)installs the package.
 
 Rules are made up of imperative code/logic, other declarative rules or a combination of both. Rules can be nested infinitely.
 

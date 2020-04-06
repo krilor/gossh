@@ -29,7 +29,7 @@ func Stat(t gossh.Target, abspath string, root bool) (Info, error) {
 	if root {
 		user = "root"
 	}
-	_, err := t.RunQuery("stat "+abspath, "", user)
+	_, err := t.RunCheck("stat "+abspath, "", user)
 
 	if err != nil {
 		return Info{}, errors.Wrapf(err, "stat %s failed", abspath)
