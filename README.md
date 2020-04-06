@@ -15,13 +15,15 @@ The package has only a handful main concepts or building blocks.
 ### Rules
 
 The base building block of the declarative mindset baked into this experiment is the notion of a [Rule](gossh.go).
-A rule is an interface with two functions, _Check_ and _Ensure_, that does what it sounds like. _Check_ checks the state, _Ensure_ ensures the state.
+A rule is an interface with a single _Ensure_ function. Ensure does what it sounds like: _Ensure_ ensures the rule is adhered to on the target.
 
-An example of such a rule is [apt.Package](rules/x/apt/apt.go). _Check_ verifies if the apt package is installed or not, and _Ensure_ (un)installs the package. Both _Check_ and _Ensure_ are dependent on the declared PackageStatus (installed or not installed) and package name.
+Ensuring is a two-step process - _check_ and _change_. Change is only done if check is not ok.
 
-Rules are made up of imperative code/logic, other declarative rules or a combination of both. Rules can be nested infinately.
+An example of a rule is [apt.Package](rules/x/apt/apt.go). _Check_ verifies if the apt package is installed or not, and _change_ (un)installs the package.
 
-`Rules` are _applied_ to `Targets`, and the hirerachy of calls are surfaced using `Trace`
+Rules are made up of imperative code/logic, other declarative rules or a combination of both. Rules can be nested infinitely.
+
+`Rules` are _applied_ to `Targets`.
 
 Implemented/example rules (just to show some ideas):
 
@@ -35,7 +37,7 @@ Implemented/example rules (just to show some ideas):
 
 A [Target](gossh.go) is a bare-metal server, virtual machine or container. It can be localhost, a remote host (SSH) or a docker container on localhost.
 
-Requirements
+(Current) Requirements
 
 * Running Linux
 * Bash shell available
@@ -45,10 +47,6 @@ Requirements
 ### Inventories
 
 An [Inventory](inventory.go) is a list of Hosts.
-
-### Trace
-
-[Trace](trace.go) is how gossh keeps track of which rules are nested inside which rules, and what rule-hierachy a SSH command originates from.
 
 ## Usage - give it a spin using docker
 
@@ -62,7 +60,7 @@ Prerequisites:
 This is what you do:
 
 0. Clone this repo
-1. Build and run a SSH enabled Ubuntu container by running `make docker-up`
+1. Build and run a SSH enabled Ubuntu container by running `make docker`
 2. Cd over to [examples/random](examples/random) and try running it with `go run main.go`
 3. Have a look at the output
 4. Modify the example script however you like and run again.
