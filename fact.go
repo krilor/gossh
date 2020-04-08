@@ -60,6 +60,24 @@ func (f *Facts) Gather(m *Host) error {
 		}
 	}
 
+	// Ensure that debian also set os family debian
+	if v, ok := f.kv[OS]; ok && v == "debian" {
+		f.kv[OSFamily] = "debian"
+	}
+
+	// Ensure that fedora also set os family rhel
+	if v, ok := f.kv[OS]; ok && v == "fedora" {
+		f.kv[OSFamily] = "rhel"
+	}
+
+	// Set rhel consistently when fedora
+	if v, ok := f.kv[OSFamily]; ok && strings.Contains(v, "fedora") {
+		f.kv[OSFamily] = "rhel"
+	}
+
+	// Only return majorversion
+	f.kv[OSVersion] = majorVersion(f.kv[OSVersion])
+
 	f.gathered = true
 
 	return nil
@@ -88,4 +106,19 @@ func parseINI(in string) map[string]string {
 	}
 
 	return kv
+}
+
+// majorversion is a simple util to ensure that only the major version is returned
+func majorVersion(in string) string {
+	if !strings.Contains(in, ".") {
+		return in
+	}
+
+	parts := strings.Split(in, ".")
+
+	if len(parts) == 0 {
+		return in
+	}
+
+	return parts[0]
 }

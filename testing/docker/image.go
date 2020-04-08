@@ -1,120 +1,181 @@
 package docker
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+	"strings"
+)
 
 // this file contains
 
 // Image is a reference to a docker image
-type Image interface {
-	Dockerfile() string
-	Name() string
-}
+type Image struct {
+	// From and tag is the docker image (prefixed repo url, if not hub.docker.com)
+	//
+	// Used in the from statement in the top of the Dockerfile
+	//
+	// FROM <From>[:<tag>]
+	From string
+	Tag  string
 
-// DebianImage is a image for ubuntu
-type DebianImage struct {
-	distro  string
-	version string
-}
+	// Last part of the dockerfile, after FROM
+	Instructions string
 
-// NewDebianImage returns a debian image
-func NewDebianImage(distro string, version string) DebianImage {
-	return DebianImage{distro, version}
-}
-
-// Dockerfile returns the dockerfile for a debian image
-func (d DebianImage) Dockerfile() string {
-	return fmt.Sprintf(`FROM %s:%s
-
-    RUN apt update
-    RUN apt -y install openssh-server sudo
-    RUN mkdir -p /var/run/sshd
-
-    RUN groupadd -r gossh && useradd -m -s /bin/bash -g gossh gossh
-    RUN adduser gossh sudo
-
-    RUN groupadd -r hobgob && useradd -m -s /bin/bash -g hobgob hobgob
-    RUN adduser hobgob sudo
-
-    RUN echo 'root:rootpwd' | chpasswd
-    RUN echo 'gossh:gosshpwd' | chpasswd
-    RUN echo 'hobgob:hobgobpwd' | chpasswd
-
-    RUN echo "#!/usr/bin/env bash\nset -e\n/usr/sbin/sshd -D" > /run.sh
-    RUN chmod +x /run.sh
-
-    EXPOSE 22
-    CMD ["/run.sh"]`, d.distro, d.version)
-}
-
-// Name returns an image name
-func (d DebianImage) Name() string {
-	return fmt.Sprintf("gossh_throwaway_%s_%s", d.distro, d.version)
-}
-
-// RHELImage is a image for ubuntu
-type RHELImage struct {
-	distro  string
-	version string
-}
-
-// NewRHELImage returns a debian image
-func NewRHELImage(distro string, version string) RHELImage {
-	return RHELImage{distro, version}
+	// Slug should be a short sluglike name
+	Slug string
 }
 
 // Dockerfile returns the dockerfile for a debian image
-func (r RHELImage) Dockerfile() string {
-	return fmt.Sprintf(`FROM %s:%s
+func (i Image) Dockerfile() string {
 
-    RUN yum -y erase vim-minimal iputils libss && \
-        yum -y install openssh openssh-server openssh-clients sudo && \
-        yum -y clean all
+	b := strings.Builder{}
 
-    RUN ssh-keygen -A
+	b.WriteString("FROM ")
+	b.WriteString(i.From)
+	if i.Tag != "" {
+		b.WriteString(":" + i.Tag)
+	}
+	b.WriteString("\n")
+	b.WriteString(i.Instructions)
+	return b.String()
 
-    RUN echo "Defaults lecture = never" >> /etc/sudoers.d/privacy
-
-    RUN groupadd -r gossh && \
-        useradd -m -s /bin/bash -g gossh gossh && \
-        usermod -g wheel gossh
-
-    RUN groupadd -r hobgob && \
-        useradd -m -s /bin/bash -g hobgob hobgob && \
-        usermod -g wheel hobgob
-
-    RUN echo 'root:rootpwd' | chpasswd
-    RUN echo 'gossh:gosshpwd' | chpasswd
-    RUN echo 'hobgob:hobgobpwd' | chpasswd
-
-    RUN echo -e "#!/usr/bin/env bash\nset -e\n/usr/sbin/sshd -D" > /run.sh
-    RUN chmod +x /run.sh
-
-    EXPOSE 22
-    CMD ["/run.sh"]`, r.distro, r.version)
 }
 
-// Name returns an image name
-func (r RHELImage) Name() string {
-	return fmt.Sprintf("gossh_throwaway_%s_%s", r.distro, r.version)
+// Name returns a gossh-prefixed name for the image
+func (i Image) Name() string {
+	return "gossh_throwaway_" + strings.ReplaceAll(i.Slug, ":", "_")
 }
 
-// CustomImage allows the user to specify a custom image name and dockerfile content
-type CustomImage struct {
-	dockerfile string
-	name       string
+var debianInstructions string = `RUN apt update
+RUN apt -y install openssh-server sudo
+RUN mkdir -p /var/run/sshd
+
+RUN groupadd -r gossh && useradd -m -s /bin/bash -g gossh gossh
+RUN adduser gossh sudo
+
+RUN groupadd -r hobgob && useradd -m -s /bin/bash -g hobgob hobgob
+RUN adduser hobgob sudo
+
+RUN echo 'root:rootpwd' | chpasswd
+RUN echo 'gossh:gosshpwd' | chpasswd
+RUN echo 'hobgob:hobgobpwd' | chpasswd
+
+RUN echo "#!/usr/bin/env bash\nset -e\n/usr/sbin/sshd -D" > /run.sh
+RUN chmod +x /run.sh
+
+EXPOSE 22
+CMD ["/run.sh"]`
+
+var yumRepoInstructions = `RUN yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-VERSION.noarch.rpm && \
+	yum -y install https://download1.rpmfusion.org/free/el/rpmfusion-free-release-VERSION.noarch.rpm && \
+	echo -e "[centos]\nname=CentOS-VERSION\nbaseurl=http://ftp.heanet.ie/pub/centos/VERSION/os/x86_64/\nenabled=1\ngpgcheck=1\ngpgkey=http://ftp.heanet.ie/pub/centos/VERSION/os/x86_64/RPM-GPG-KEY-CentOS-VERSION" > /etc/yum.repos.d/centosVERSION.repo
+
+`
+
+var rhelInstructions string = `
+RUN yum -y install sudo && \
+	sed -i.old '0,/# %wheel/{s/# %wheel.*/%wheel ALL=(ALL) ALL/}' /etc/sudoers
+
+RUN yum -y install openssh openssh-server openssh-clients && \
+	yum -y clean all
+
+# ssh-keygen -A is not available on rhel6 based images
+RUN ssh-keygen -q -N "" -t dsa -f /etc/ssh/ssh_host_dsa_key && \
+	ssh-keygen -q -N "" -t rsa -b 4096 -f /etc/ssh/ssh_host_rsa_key && \
+	ssh-keygen -q -N "" -t ecdsa -f /etc/ssh/ssh_host_ecdsa_key
+
+RUN echo "Defaults lecture = never" >> /etc/sudoers.d/privacy
+
+RUN groupadd -r gossh && \
+	useradd -m -s /bin/bash -g gossh gossh && \
+	usermod -g wheel gossh
+
+RUN groupadd -r hobgob && \
+	useradd -m -s /bin/bash -g hobgob hobgob && \
+	usermod -g wheel hobgob
+
+RUN echo 'root:rootpwd' | chpasswd
+RUN echo 'gossh:gosshpwd' | chpasswd
+RUN echo 'hobgob:hobgobpwd' | chpasswd
+
+RUN echo -e "#!/usr/bin/env bash\nset -e\n/usr/sbin/sshd -D" > /run.sh
+RUN chmod +x /run.sh
+
+EXPOSE 22
+CMD ["/run.sh"]`
+
+// Ubuntu returns a ubuntu image
+func Ubuntu(tag string) Image {
+	return Image{"ubuntu", tag, debianInstructions, fmt.Sprintf("ubuntu:%s", tag)}
 }
 
-// NewCustomImage returns a Image based on the input
-func NewCustomImage(dockerfile, name string) CustomImage {
-	return CustomImage{dockerfile, name}
+// Debian returns a Debian image
+//
+// https://hub.docker.com/_/debian
+func Debian(tag string) Image {
+	return Image{"debian", tag, debianInstructions, fmt.Sprintf("debian:%s", tag)}
 }
 
-// Dockerfile returns dockerfile contents
-func (c CustomImage) Dockerfile() string {
-	return c.dockerfile
+// CentOS returns a CentOS image
+func CentOS(version int) Image {
+	return Image{"centos", strconv.Itoa(version), rhelInstructions, fmt.Sprintf("centos:%d", version)}
 }
 
-// Name returns name
-func (c CustomImage) Name() string {
-	return c.name
+// RedHat returns a RHEL image
+func RedHat(version int) Image {
+	return Image{fmt.Sprintf("registry.access.redhat.com/rhel%d/rhel", version), "", strings.ReplaceAll(yumRepoInstructions, "VERSION", strconv.Itoa(version)) + rhelInstructions, fmt.Sprintf("rhel:%d", version)}
+}
+
+// Oracle returns a ol Image
+func Oracle(version int) Image {
+	return Image{"oraclelinux", strconv.Itoa(version), rhelInstructions, fmt.Sprintf("ol:%d", version)}
+}
+
+// Fedora returns a fedora image
+func Fedora(version int) Image {
+	return Image{"fedora", strconv.Itoa(version), rhelInstructions, fmt.Sprintf("fedora:%d", version)}
+}
+
+// Bench is
+var Bench map[string]Image = map[string]Image{
+	"fedora:33": Fedora(33),
+}
+
+// FullBench is a map of images that can be used as a test bench.
+var FullBench map[string]Image = map[string]Image{
+
+	// Debian - https://hub.docker.com/_/debian
+	"debian:bullseye": Debian("bullseye"),
+	"debian:buster":   Debian("buster"),
+	"debian:stretch":  Debian("stretch"),
+
+	// Ubuntu - https://hub.docker.com/_/ubuntu
+	"ubuntu:bionic": Ubuntu("bionic"), // 18
+	"ubuntu:eoan":   Ubuntu("eoan"),   // 19
+	"ubuntu:focal":  Ubuntu("focal"),  // 20
+	"ubuntu:trusty": Ubuntu("trusty"), // 16
+	"ubuntu:xenial": Ubuntu("xenial"), // 14
+
+	// CentOS - https://hub.docker.com/_/centos
+	"centos:7": CentOS(7),
+	"centos:6": CentOS(6),
+
+	// RedHat - https://catalog.redhat.com/software/containers/search?q=rhel&p=1&vendor_name=Red%20Hat%2C%20Inc.&build_categories_list=Base%20Image&product=Red%20Hat%20Enterprise%20Linux&release_categories=Generally%20Available&rows=60
+	"rhel:6": RedHat(6),
+	"rhel:7": RedHat(7),
+
+	// Oracle Linux - https://hub.docker.com/_/oraclelinux/
+	"ol:6": Oracle(6),
+	"ol:7": Oracle(7),
+	"ol:8": Oracle(8),
+
+	// Fedora - https://hub.docker.com/_/fedora
+	"fedora:26": Fedora(26),
+	"fedora:27": Fedora(27),
+	"fedora:28": Fedora(28),
+	"fedora:29": Fedora(29),
+	"fedora:30": Fedora(30),
+	"fedora:31": Fedora(31),
+	"fedora:32": Fedora(32),
+	"fedora:33": Fedora(33),
 }

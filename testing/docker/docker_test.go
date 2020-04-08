@@ -10,13 +10,8 @@ import (
 
 func TestDockerThrowaway(t *testing.T) {
 
-	imgs := []Image{
-		NewDebianImage("ubuntu", "bionic"),
-		NewRHELImage("centos", "7"),
-	}
-
-	for _, img := range imgs {
-		t.Run(img.Name(), func(t *testing.T) {
+	for key, img := range FullBench {
+		t.Run(key, func(t *testing.T) {
 
 			c, err := New(img)
 

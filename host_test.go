@@ -228,8 +228,8 @@ func TestRemote(t *testing.T) {
 	}
 
 	for _, img := range []docker.Image{
-		docker.NewDebianImage("ubuntu", "bionic"),
-		docker.NewRHELImage("centos", "7"),
+		docker.Ubuntu("bionic"),
+		docker.CentOS(7),
 	} {
 
 		c, err := docker.New(img)

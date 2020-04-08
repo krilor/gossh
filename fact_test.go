@@ -51,20 +51,64 @@ home_url="https://www.ubuntu.com/"`,
 	}
 }
 
+func TestMajorVersion(t *testing.T) {
+
+	var tests = []struct {
+		in     string
+		expect string
+	}{
+		{"18.04", "18"},
+		{"7.7", "7"},
+		{"6", "6"},
+		{"", ""},
+	}
+	for _, test := range tests {
+		t.Run(test.in, func(t *testing.T) {
+
+			got := majorVersion(test.in)
+
+			if got != test.expect {
+				t.Errorf("notequal: got \"%s\" - expect \"%s\"", got, test.expect)
+			}
+
+		})
+	}
+}
+
 func TestGather(t *testing.T) {
 
 	var tests = []struct {
 		img    docker.Image
 		expect Facts
 	}{
-		{img: docker.NewDebianImage("ubuntu", "bionic"), expect: Facts{kv: map[Fact]string{
+		{img: docker.Ubuntu("bionic"), expect: Facts{kv: map[Fact]string{
 			OS:        "ubuntu",
 			OSFamily:  "debian",
-			OSVersion: "18.04", // TODO this should probably be 18, and we should skip .04
+			OSVersion: "18",
 		}}},
-		{img: docker.NewRHELImage("centos", "7"), expect: Facts{kv: map[Fact]string{
+		{img: docker.Debian("buster"), expect: Facts{kv: map[Fact]string{
+			OS:        "debian",
+			OSFamily:  "debian",
+			OSVersion: "10",
+		}}},
+		{img: docker.RedHat(7), expect: Facts{kv: map[Fact]string{
+			OS:        "rhel",
+			OSFamily:  "rhel",
+			OSVersion: "7",
+		}}},
+		{img: docker.Oracle(7), expect: Facts{kv: map[Fact]string{
+			OS:        "ol",
+			OSFamily:  "rhel",
+			OSVersion: "7",
+		}}},
+		{img: docker.Fedora(32), expect: Facts{kv: map[Fact]string{
+			OS:        "fedora",
+			OSFamily:  "rhel",
+			OSVersion: "32",
+		}}},
+		{img: docker.CentOS(7), expect: Facts{kv: map[Fact]string{
 			OS:        "centos",
-			OSFamily:  "rhel fedora", // TODO - this doesn't look nice. Would like "rhel" only
+			OSFamily:  "rhel",
 			OSVersion: "7",
 		}}},
 	}
