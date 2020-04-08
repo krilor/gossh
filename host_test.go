@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/user"
+	"strings"
 	"testing"
 
 	"github.com/krilor/gossh/testing/docker"
@@ -262,6 +263,48 @@ func TestRemote(t *testing.T) {
 					t.Errorf("exitstatus: got \"%d\" - expect \"%d\"", got.ExitStatus, test.expect.ExitStatus)
 				}
 
+			})
+		}
+	}
+}
+
+func TestRemotePut(t *testing.T) {
+	var tests = []string{"lionking"}
+
+	for _, img := range []docker.Image{
+		docker.Ubuntu("bionic"),
+		docker.CentOS(7),
+	} {
+
+		c, err := docker.New(img)
+		if err != nil {
+			log.Fatalf("could not get throwaway container: %v", err)
+		}
+		defer c.Kill()
+
+		r, err := newRemote("localhost", c.Port(), "gossh", "gosshpwd")
+
+		if err != nil {
+			log.Fatalf("could not connect to throwaway container %v", err)
+		}
+
+		for _, test := range tests {
+			t.Run(test+img.Name(), func(t *testing.T) {
+				err := r.put(strings.NewReader(test), int64(len(test)), "/tmp/"+test, 644)
+
+				if err != nil {
+					t.Error("scp put failed", err)
+				}
+
+				o, e, s, err := c.Exec("cat /tmp/" + test)
+
+				if err != nil {
+					t.Error("put failed", o, e, s, err)
+				}
+
+				if o != test {
+					t.Errorf("file not equal: got: %s, expected: %s", o, test)
+				}
 			})
 		}
 	}

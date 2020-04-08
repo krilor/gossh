@@ -3,11 +3,13 @@ package gossh
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
 	"os/exec"
 	"os/user"
+	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -81,6 +83,46 @@ func (l *local) run(cmd string, stdin string, sudo bool, user string) (Response,
 	}
 
 	return r, nil
+}
+
+// Put puts the contents of a Reader on a path on the remote machine
+//
+// Inspiration:
+// https://github.com/laher/scp-go/blob/master/scp/toremote.go
+// https://gist.github.com/jedy/3357393
+//
+// SCP notes:
+// https://web.archive.org/web/20170215184048/
+// https://blogs.oracle.com/janp/entry/how_the_scp_protocol_works
+// https://en.wikipedia.org/wiki/Secure_copy#cite_note-Pechanec-2
+func (r *remote) put(content io.Reader, size int64, path string, mode uint32) error {
+
+	// consider using github.com/pkg/sftp
+
+	session, err := r.client.NewSession()
+	if err != nil {
+		return errors.Wrap(err, "failed to create scp session")
+	}
+	defer session.Close()
+
+	go func() {
+		w, _ := session.StdinPipe()
+		defer w.Close()
+
+		// header message has the format C<mode> <size> <filename>
+		fmt.Fprintf(w, "C%04o %d %s\n", mode, size, filepath.Base(path))
+
+		io.Copy(w, content)
+
+		// transfer end with \x00
+		fmt.Fprint(w, "\x00")
+	}()
+
+	if b, err := session.CombinedOutput(fmt.Sprintf("/usr/bin/scp -tr %s", path)); err != nil {
+		return errors.Wrapf(err, "unable to copy content: %s", string(b))
+	}
+
+	return nil
 }
 
 type remote struct {
