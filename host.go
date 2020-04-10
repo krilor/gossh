@@ -92,8 +92,7 @@ func (l *local) run(cmd string, stdin string, sudo bool, user string) (Response,
 // https://gist.github.com/jedy/3357393
 //
 // SCP notes:
-// https://web.archive.org/web/20170215184048/
-// https://blogs.oracle.com/janp/entry/how_the_scp_protocol_works
+// https://web.archive.org/web/20170215184048/https://blogs.oracle.com/janp/entry/how_the_scp_protocol_works
 // https://en.wikipedia.org/wiki/Secure_copy#cite_note-Pechanec-2
 func (r *remote) put(content io.Reader, size int64, path string, mode uint32) error {
 
