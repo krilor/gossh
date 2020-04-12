@@ -103,16 +103,21 @@ func NewSudoClient(conn *ssh.Client, user, sudopwd string, opts ...sftp.ClientOp
 		"/bin/sftp-server",
 	}
 
+	if user == "" || user == "-" {
+		user = "root"
+	}
+
 	// this command is where most of the magic happens
 	//
 	// sudo -p specifies the password prompt from sudo. The prompt is sent to stderr
 	// sudo -S dictates that password should be read from stdin
+	// sudo -u specifies the user
 	// sh -c 'cmd' passes cmd to sh
 	// >&2 echo "%s" echos %s to stderr ( see https://stackoverflow.com/a/23550347 )
 	// & %s is the final command to be executed, which is the path to server-path binary. It is a list of possible binary paths and it will pick the first one that exists.
 	// In total this means that we can read from stderr and write to stdin to
 	// TODO - this should probably be a separate, tested function
-	cmd := fmt.Sprintf(`sudo -p '%s' -S sh -c '>&2 echo "%s" & %s'`, promptpwd+"\n", promptsuccess, strings.Join(serverpaths, " 2> /dev/null || "))
+	cmd := fmt.Sprintf(`sudo -u '%s' -p '%s' -S sh -c '>&2 echo "%s" & %s'`, user, promptpwd+"\n", promptsuccess, strings.Join(serverpaths, " 2> /dev/null || "))
 
 	stdin, err := s.StdinPipe()
 	if err != nil {

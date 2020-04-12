@@ -21,6 +21,7 @@ func TestSudoSftp(t *testing.T) {
 		{"hobgob", "gossh", "", "/home/gossh/somefile"},
 		{"hobgob", "gossh", "hobgobpwd", "/home/gossh/somefile2"},
 		{"hobgob", "root", "", "/root/anotherfile"},
+		{"hobgob", "", "", "/root/anotherfile2"},
 		{"joxter", "stinky", "joxterpwd", "/home/stinky/joxterfile"},
 		// TODO negative test cases
 	}
@@ -51,6 +52,17 @@ func TestSudoSftp(t *testing.T) {
 				err = sftp.Mkdir(test.file)
 				if err != nil {
 					t.Fatal("could not create dir in hobgob home", err)
+				}
+
+				o, _, s, err := c.Exec("stat --format='%U' " + test.file)
+
+				sudo := test.sudo
+				if sudo == "" || sudo == "-" {
+					sudo = "root"
+				}
+
+				if o != sudo || s != 0 {
+					t.Errorf("owner: expect %s:%d, got %s:%d", test.sudo, 0, o, s)
 				}
 			})
 		}
