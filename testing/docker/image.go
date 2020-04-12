@@ -70,10 +70,17 @@ RUN yum -y install openssh openssh-server openssh-clients && \
 RUN ssh-keygen -q -N "" -t dsa -f /etc/ssh/ssh_host_dsa_key && \
 	ssh-keygen -q -N "" -t rsa -b 4096 -f /etc/ssh/ssh_host_rsa_key && \
 	ssh-keygen -q -N "" -t ecdsa -f /etc/ssh/ssh_host_ecdsa_key
+`
 
-RUN echo "Defaults lecture = never" >> /etc/sudoers.d/privacy`
+// TODO - sudo coredump are a workaround for
+// https://ask.fedoraproject.org/t/sudo-setrlimit-rlimit-core-operation-not-permitted/4223
+// https://bugs.launchpad.net/ubuntu/+source/sudo/+bug/1857036
+// https://bugzilla.redhat.com/show_bug.cgi?id=1773148
 
 var commonInstructions string = `
+RUN echo "Set disable_coredump false" >> /etc/sudo.conf
+RUN echo "Defaults lecture = never" >> /etc/sudoers.d/privacy
+
 RUN groupadd -r gossh && \
 	useradd -m -s /bin/bash -g gossh gossh && \
 	echo "gossh  ALL=(ALL) ALL" > /etc/sudoers.d/gossh

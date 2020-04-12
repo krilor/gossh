@@ -89,6 +89,21 @@ func (c *Container) Port() int {
 	return c.port
 }
 
+// NewSSHClient returns a new ssh client for the container
+// user must be eiter root, gossh or hobgob
+func (c *Container) NewSSHClient(user string) (*ssh.Client, error) {
+
+	config := &ssh.ClientConfig{
+		User: user,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(user + "pwd"),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+	}
+
+	return ssh.Dial("tcp", fmt.Sprintf("localhost:%d", c.port), config)
+}
+
 // New creates runs a docker container with ssh enabled.
 func New(image Image) (*Container, error) {
 
