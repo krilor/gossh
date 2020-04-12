@@ -101,6 +101,7 @@ func NewSudoClient(conn *ssh.Client, user, sudopwd string, opts ...sftp.ClientOp
 		"/usr/lib/sftp-server",
 		"/usr/bin/sftp-server",
 		"/bin/sftp-server",
+		"sftp-server",
 	}
 
 	if user == "" || user == "-" {
@@ -114,7 +115,7 @@ func NewSudoClient(conn *ssh.Client, user, sudopwd string, opts ...sftp.ClientOp
 	// sudo -u specifies the user
 	// sh -c 'cmd' passes cmd to sh
 	// >&2 echo "%s" echos %s to stderr ( see https://stackoverflow.com/a/23550347 )
-	// & %s is the final command to be executed, which is the path to server-path binary. It is a list of possible binary paths and it will pick the first one that exists.
+	// & %s is the final command to be executed, which is the path to the sftp-server binary. It is a list of possible binary paths and it will pick the first one that exists. At the end, it will look in $PATH.
 	// In total this means that we can read from stderr and write to stdin to
 	// TODO - this should probably be a separate, tested function
 	cmd := fmt.Sprintf(`sudo -u '%s' -p '%s' -S sh -c '>&2 echo "%s" & %s'`, user, promptpwd+"\n", promptsuccess, strings.Join(serverpaths, " 2> /dev/null || "))
@@ -174,6 +175,7 @@ func NewSudoClient(conn *ssh.Client, user, sudopwd string, opts ...sftp.ClientOp
 
 // getPrompt is a handy method for reading a prompt from stderr
 // prompt should be at the end of the read, minus a newline
+// TODO - test?
 func getPrompt(rd io.Reader, length int) (string, error) {
 	buf := make([]byte, 2048)
 
