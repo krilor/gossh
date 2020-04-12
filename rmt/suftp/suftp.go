@@ -152,8 +152,6 @@ func NewSudoClient(conn *ssh.Client, user, sudopwd string, opts ...sftp.ClientOp
 		stdin.Write([]byte(sudopwd + "\n"))
 	case promptsuccess:
 		return sftp.NewClientPipe(stdout, stdin, opts...)
-	default:
-		return nil, fmt.Errorf("unknown prompt: %s", prompt)
 	}
 
 	// Second read should be either be success or something else. If it is not success, wrong sudo pasword is the most likely scenario.
@@ -170,6 +168,7 @@ func NewSudoClient(conn *ssh.Client, user, sudopwd string, opts ...sftp.ClientOp
 }
 
 // getPrompt is a handy method for reading a prompt from stderr
+// prompt should be at the end of the read, minus a newline
 func getPrompt(rd io.Reader, length int) (string, error) {
 	buf := make([]byte, 2048)
 
