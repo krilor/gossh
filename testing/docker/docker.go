@@ -17,11 +17,14 @@ import (
 //
 // The package goal is to provide ssh-enabled (password) containers with the following user setup
 //
-//     | User   | Password  | Sudo rights  | SSH keys |
-//     |--------|-----------|------------- |----------|
-//     | root   | rootpwd   | ALL          | TODO     |
-//     | gossh  | gosshpwd  | ALL          | TODO     |
-//     | hobgob | hobgobpwd | NOPASSWD:ALL | TODO     |
+//     | User   | Password  | Sudo rights  | Sudo lecture | SSH keys |
+//     |--------|-----------|------------- |--------------|----------|
+//     | root   | rootpwd   | ALL          | N/A          | N/A      |
+//     | gossh  | gosshpwd  | ALL          | never        | TODO     |
+//     | hobgob | hobgobpwd | NOPASSWD:ALL | never        | TODO     |
+//     | joxter | joxterpwd | ALL          | allways      | TODO     |
+//     | groke  | grokepwd  | NOPASSWD:ALL | allways      | TODO     |
+//     | stinky | stinkypwd | NO           | N/A          | TODO     |
 //
 
 // findPort finds and returns a free port on the host machine

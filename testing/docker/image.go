@@ -72,26 +72,40 @@ RUN ssh-keygen -q -N "" -t dsa -f /etc/ssh/ssh_host_dsa_key && \
 	ssh-keygen -q -N "" -t ecdsa -f /etc/ssh/ssh_host_ecdsa_key
 `
 
-// TODO - sudo coredump are a workaround for
+// TODO - Set disable_coredump false is a workaround for
 // https://ask.fedoraproject.org/t/sudo-setrlimit-rlimit-core-operation-not-permitted/4223
 // https://bugs.launchpad.net/ubuntu/+source/sudo/+bug/1857036
 // https://bugzilla.redhat.com/show_bug.cgi?id=1773148
 
 var commonInstructions string = `
 RUN echo "Set disable_coredump false" >> /etc/sudo.conf
-RUN echo "Defaults lecture = never" >> /etc/sudoers.d/privacy
+RUN echo "Defaults lecture = never" >> /etc/sudoers.d/0_privacy
+
+RUN echo 'root:rootpwd' | chpasswd
 
 RUN groupadd -r gossh && \
 	useradd -m -s /bin/bash -g gossh gossh && \
-	echo "gossh  ALL=(ALL) ALL" > /etc/sudoers.d/gossh
+	echo 'gossh:gosshpwd' | chpasswd && \
+	printf "%s\n" 'gossh ALL=(ALL) ALL' 'Defaults:gossh lecture = never' > /etc/sudoers.d/gossh
 
 RUN groupadd -r hobgob && \
 	useradd -m -s /bin/bash -g hobgob hobgob && \
-	echo "hobgob ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/hobgob
+	echo 'hobgob:hobgobpwd' | chpasswd && \
+	printf "%s\n" 'hobgob ALL=(ALL) NOPASSWD:ALL' 'Defaults:hobgob lecture = never' > /etc/sudoers.d/hobgob
 
-RUN echo 'root:rootpwd' | chpasswd
-RUN echo 'gossh:gosshpwd' | chpasswd
-RUN echo 'hobgob:hobgobpwd' | chpasswd
+RUN groupadd -r joxter && \
+	useradd -m -s /bin/bash -g joxter joxter && \
+	echo 'joxter:joxterpwd' | chpasswd && \
+	printf "%s\n" 'joxter ALL=(ALL) ALL' 'Defaults:joxter lecture = always' > /etc/sudoers.d/joxter
+
+RUN groupadd -r groke && \
+	useradd -m -s /bin/bash -g groke groke && \
+	echo 'groke:grokepwd' | chpasswd && \
+	printf "%s\n" 'groke ALL=(ALL) NOPASSWD:ALL' 'Defaults:groke lecture = always' > /etc/sudoers.d/groke
+
+RUN groupadd -r stinky && \
+	useradd -m -s /bin/bash -g stinky stinky && \
+	echo 'stinky:stinkypwd' | chpasswd
 
 RUN printf "%s\n" '#!/usr/bin/env bash' 'set -e' '/usr/sbin/sshd -D' > /run.sh
 

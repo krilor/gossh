@@ -21,6 +21,7 @@ func TestSudoSftp(t *testing.T) {
 		{"hobgob", "gossh", "", "/home/gossh/somefile"},
 		{"hobgob", "gossh", "hobgobpwd", "/home/gossh/somefile2"},
 		{"hobgob", "root", "", "/root/anotherfile"},
+		{"joxter", "stinky", "joxterpwd", "/home/stinky/joxterfile"},
 		// TODO negative test cases
 	}
 

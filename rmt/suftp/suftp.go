@@ -2,6 +2,7 @@ package suftp
 
 import (
 	"fmt"
+	"io"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -75,10 +76,12 @@ func NewSubsystemCommandClient(conn *ssh.Client, cmd string, opts ...sftp.Client
 
 // NewSudoClient creates a new SFTP client on conn, using user and sudopass for the conn user and zero or more option
 // functions.
+//
 // The user is the user to get an sftp client for. Sudopwd is the password for the user on conn.
 //
-// NOTE - the current implementation will fail if there is a sudo lecture - TODO
-// NOTE - There is also a known issue with some sudo core dumps that might interere with the stderr that the method wants. See https://bugzilla.redhat.com/show_bug.cgi?id=1773148
+// NOTE - There is a known sudo issue where sudo emits an error that makes this method not work.
+// See https://bugzilla.redhat.com/show_bug.cgi?id=1773148
+// Error returned will be "wrong sudo password or sudo error"
 func NewSudoClient(conn *ssh.Client, user, sudopwd string, opts ...sftp.ClientOption) (*sftp.Client, error) {
 
 	s, err := conn.NewSession()
@@ -88,7 +91,7 @@ func NewSudoClient(conn *ssh.Client, user, sudopwd string, opts ...sftp.ClientOp
 
 	promptpwd := "gimmeyourpwdnow"
 	promptsuccess := "thesudopwdwasok"
-	promptlength := 16 // prompt + newline
+	promptlength := len(promptpwd)
 
 	// serverpaths are the most likely paths to the sftp-server binary, ordered from most likely less likely
 	// paths are from https://winscp.net/eng/docs/faq_su#fn2
@@ -132,15 +135,19 @@ func NewSudoClient(conn *ssh.Client, user, sudopwd string, opts ...sftp.ClientOp
 		return nil, err
 	}
 
-	buf := make([]byte, promptlength)
-
-	// First read should either be success promt, password prompt or something else
-	_, err = stderr.Read(buf)
-	if err != nil {
-		return nil, errors.Wrap(err, "first stderr read failed")
+	// Sudo might output a lecture, so looping for either password or success prompt
+	var prompt string
+	for true {
+		prompt, err = getPrompt(stderr, promptlength)
+		if err != nil {
+			return nil, errors.Wrap(err, "first stderr read failed")
+		}
+		if prompt == promptpwd || prompt == promptsuccess {
+			break
+		}
 	}
 
-	switch prompt := string(buf[:promptlength-1]); prompt { // remove newline char at end
+	switch prompt {
 	case promptpwd:
 		stdin.Write([]byte(sudopwd + "\n"))
 	case promptsuccess:
@@ -149,15 +156,34 @@ func NewSudoClient(conn *ssh.Client, user, sudopwd string, opts ...sftp.ClientOp
 		return nil, fmt.Errorf("unknown prompt: %s", prompt)
 	}
 
-	// Second read cshouldan be either be success or something else. If it is not success, wrong sudo pasword is the most likely scenario.
-	_, err = stderr.Read(buf)
+	// Second read should be either be success or something else. If it is not success, wrong sudo pasword is the most likely scenario.
+	prompt, err = getPrompt(stderr, promptlength)
 	if err != nil {
 		return nil, errors.Wrap(err, "second stderr read failed")
 	}
 
-	if string(buf[:promptlength-1]) != promptsuccess {
-		return nil, fmt.Errorf("wrong sudo password: %s", string(buf))
+	if prompt != promptsuccess {
+		return nil, fmt.Errorf("wrong sudo password or sudo error")
 	}
 
 	return sftp.NewClientPipe(stdout, stdin, opts...)
+}
+
+// getPrompt is a handy method for reading a prompt from stderr
+func getPrompt(rd io.Reader, length int) (string, error) {
+	buf := make([]byte, 2048)
+
+	n, err := rd.Read(buf)
+	if err != nil {
+		return "", err
+	}
+
+	var prompt string
+	if n <= length+1 {
+		prompt = string(buf[:n-1])
+	} else {
+		prompt = string(buf[n-length-1 : n-1])
+	}
+
+	return prompt, nil
 }
