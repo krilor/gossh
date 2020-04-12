@@ -46,27 +46,14 @@ func (i Image) Name() string {
 	return "gossh_throwaway_" + strings.ReplaceAll(i.Slug, ":", "_")
 }
 
-var debianInstructions string = `RUN apt update
+var debianInstructions string = `
+RUN apt update
 RUN apt -y install openssh-server sudo
 RUN mkdir -p /var/run/sshd
+`
 
-RUN groupadd -r gossh && useradd -m -s /bin/bash -g gossh gossh
-RUN adduser gossh sudo
-
-RUN groupadd -r hobgob && useradd -m -s /bin/bash -g hobgob hobgob
-RUN adduser hobgob sudo
-
-RUN echo 'root:rootpwd' | chpasswd
-RUN echo 'gossh:gosshpwd' | chpasswd
-RUN echo 'hobgob:hobgobpwd' | chpasswd
-
-RUN echo "#!/usr/bin/env bash\nset -e\n/usr/sbin/sshd -D" > /run.sh
-RUN chmod +x /run.sh
-
-EXPOSE 22
-CMD ["/run.sh"]`
-
-var yumRepoInstructions = `RUN yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-VERSION.noarch.rpm && \
+var yumRepoInstructions = `
+RUN yum -y install https://dl.fedoraproject.org/pub/epel/epel-release-latest-VERSION.noarch.rpm && \
 	yum -y install https://download1.rpmfusion.org/free/el/rpmfusion-free-release-VERSION.noarch.rpm && \
 	echo -e "[centos]\nname=CentOS-VERSION\nbaseurl=http://ftp.heanet.ie/pub/centos/VERSION/os/x86_64/\nenabled=1\ngpgcheck=1\ngpgkey=http://ftp.heanet.ie/pub/centos/VERSION/os/x86_64/RPM-GPG-KEY-CentOS-VERSION" > /etc/yum.repos.d/centosVERSION.repo
 
@@ -84,56 +71,59 @@ RUN ssh-keygen -q -N "" -t dsa -f /etc/ssh/ssh_host_dsa_key && \
 	ssh-keygen -q -N "" -t rsa -b 4096 -f /etc/ssh/ssh_host_rsa_key && \
 	ssh-keygen -q -N "" -t ecdsa -f /etc/ssh/ssh_host_ecdsa_key
 
-RUN echo "Defaults lecture = never" >> /etc/sudoers.d/privacy
+RUN echo "Defaults lecture = never" >> /etc/sudoers.d/privacy`
 
+var commonInstructions string = `
 RUN groupadd -r gossh && \
 	useradd -m -s /bin/bash -g gossh gossh && \
-	usermod -g wheel gossh
+	echo "gossh  ALL=(ALL) ALL" > /etc/sudoers.d/gossh
 
 RUN groupadd -r hobgob && \
 	useradd -m -s /bin/bash -g hobgob hobgob && \
-	usermod -g wheel hobgob
+	echo "hobgob ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/hobgob
 
 RUN echo 'root:rootpwd' | chpasswd
 RUN echo 'gossh:gosshpwd' | chpasswd
 RUN echo 'hobgob:hobgobpwd' | chpasswd
 
-RUN echo -e "#!/usr/bin/env bash\nset -e\n/usr/sbin/sshd -D" > /run.sh
+RUN printf "%s\n" '#!/usr/bin/env bash' 'set -e' '/usr/sbin/sshd -D' > /run.sh
+
 RUN chmod +x /run.sh
 
 EXPOSE 22
-CMD ["/run.sh"]`
+CMD ["/run.sh"]
+`
 
 // Ubuntu returns a ubuntu image
 func Ubuntu(tag string) Image {
-	return Image{"ubuntu", tag, debianInstructions, fmt.Sprintf("ubuntu:%s", tag)}
+	return Image{"ubuntu", tag, debianInstructions + commonInstructions, fmt.Sprintf("ubuntu:%s", tag)}
 }
 
 // Debian returns a Debian image
 //
 // https://hub.docker.com/_/debian
 func Debian(tag string) Image {
-	return Image{"debian", tag, debianInstructions, fmt.Sprintf("debian:%s", tag)}
+	return Image{"debian", tag, debianInstructions + commonInstructions, fmt.Sprintf("debian:%s", tag)}
 }
 
 // CentOS returns a CentOS image
 func CentOS(version int) Image {
-	return Image{"centos", strconv.Itoa(version), rhelInstructions, fmt.Sprintf("centos:%d", version)}
+	return Image{"centos", strconv.Itoa(version), rhelInstructions + commonInstructions, fmt.Sprintf("centos:%d", version)}
 }
 
 // RedHat returns a RHEL image
 func RedHat(version int) Image {
-	return Image{fmt.Sprintf("registry.access.redhat.com/rhel%d/rhel", version), "", strings.ReplaceAll(yumRepoInstructions, "VERSION", strconv.Itoa(version)) + rhelInstructions, fmt.Sprintf("rhel:%d", version)}
+	return Image{fmt.Sprintf("registry.access.redhat.com/rhel%d/rhel", version), "", strings.ReplaceAll(yumRepoInstructions, "VERSION", strconv.Itoa(version)) + rhelInstructions + commonInstructions, fmt.Sprintf("rhel:%d", version)}
 }
 
 // Oracle returns a ol Image
 func Oracle(version int) Image {
-	return Image{"oraclelinux", strconv.Itoa(version), rhelInstructions, fmt.Sprintf("ol:%d", version)}
+	return Image{"oraclelinux", strconv.Itoa(version), rhelInstructions + commonInstructions, fmt.Sprintf("ol:%d", version)}
 }
 
 // Fedora returns a fedora image
 func Fedora(version int) Image {
-	return Image{"fedora", strconv.Itoa(version), rhelInstructions, fmt.Sprintf("fedora:%d", version)}
+	return Image{"fedora", strconv.Itoa(version), rhelInstructions + commonInstructions, fmt.Sprintf("fedora:%d", version)}
 }
 
 // Bench is

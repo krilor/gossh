@@ -14,6 +14,15 @@ import (
 )
 
 // Package docker provides functionality to create throwaway docker containers in test
+//
+// The package goal is to provide ssh-enabled (password) containers with the following user setup
+//
+//     | User   | Password  | Sudo rights  | SSH keys |
+//     |--------|-----------|------------- |----------|
+//     | root   | rootpwd   | ALL          | TODO     |
+//     | gossh  | gosshpwd  | ALL          | TODO     |
+//     | hobgob | hobgobpwd | NOPASSWD:ALL | TODO     |
+//
 
 // findPort finds and returns a free port on the host machine
 // inspired by https://github.com/Konstantin8105/FreePort/blob/master/freeport.go
