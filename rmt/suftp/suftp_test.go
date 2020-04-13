@@ -19,13 +19,14 @@ func TestSudoSftp(t *testing.T) {
 		errend  string // the end of a error string. empty if no error.
 	}{
 		{"gossh", "hobgob", "gosshpwd", "/home/hobgob/somefile", ""},
+		{"gossh", "hobgob", "incorrectpassword", "/home/hobgob/somefile", "wrong sudo password"},
 		{"gossh", "root", "gosshpwd", "/root/somefile", ""},
 		{"hobgob", "gossh", "", "/home/gossh/somefile", ""},
 		{"hobgob", "gossh", "hobgobpwd", "/home/gossh/somefile2", ""},
 		{"hobgob", "root", "", "/root/anotherfile", ""},
 		{"hobgob", "", "", "/root/anotherfile2", ""},
 		{"joxter", "stinky", "joxterpwd", "/home/stinky/joxterfile", ""},
-		{"stinky", "gossh", "stinkypwd", "/home/gossh/stinkyfile", "sudo failed"},
+		{"stinky", "gossh", "stinkypwd", "/home/gossh/stinkyfile", "sudo failed or no sudo rights"}, // stinky does not have sudo rights
 	}
 
 	for _, img := range docker.FullBench {

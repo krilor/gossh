@@ -146,7 +146,7 @@ func NewSudoClient(conn *ssh.Client, user, sudopwd string, opts ...sftp.ClientOp
 		return nil, err
 	}
 
-	// Sudo might output a lecture, so looping for either password or success prompt
+	// Sudo might output a lecture, so looping for either password, error or success prompt
 	prompt, err := getPrompt(stderr)
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get err prompt")
@@ -161,7 +161,9 @@ func NewSudoClient(conn *ssh.Client, user, sudopwd string, opts ...sftp.ClientOp
 		return sftp.NewClientPipe(stdout, stdin, opts...)
 	}
 
-	// Second read should be either be success or something else. If it is not success, wrong sudo pasword is the most likely scenario.
+	// Second read is only after pwd has been entered.
+	// If it returns pwd prompt again, it means that it was the wrong password.
+	// Error means the user is not allowed to sudo or something else went wrong.
 	prompt, err = getPrompt(stderr)
 	if err != nil {
 		return nil, errors.Wrap(err, "second stderr read failed")
@@ -169,7 +171,7 @@ func NewSudoClient(conn *ssh.Client, user, sudopwd string, opts ...sftp.ClientOp
 
 	switch prompt {
 	case prompterror:
-		return nil, errors.New("sudo failed")
+		return nil, errors.New("sudo failed or no sudo rights")
 	case promptpwd:
 		return nil, fmt.Errorf("wrong sudo password")
 	}
@@ -179,7 +181,7 @@ func NewSudoClient(conn *ssh.Client, user, sudopwd string, opts ...sftp.ClientOp
 
 // getPrompt is a handy method for reading a prompt from stderr
 // prompt should be at the end of the read, minus a newline
-// TODO - test?
+// TODO - test
 func getPrompt(rd io.Reader) (string, error) {
 	buf := make([]byte, 2048)
 
