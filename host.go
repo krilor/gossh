@@ -1,10 +1,8 @@
 package gossh
 
 import (
-	"bytes"
 	"fmt"
 	"log"
-	"os/exec"
 	"os/user"
 	"regexp"
 	"strings"
@@ -37,60 +35,12 @@ func (l *local) user() string {
 	return l.usr
 }
 
-// run cmd
-// refs:
-// https://stackoverflow.com/a/30329351 - shell
-// https://stackoverflow.com/a/24095983 - sudo
-// https://stackoverflow.com/a/55055100 - exit status
-func (l *local) run(cmd string, stdin string, sudo bool, user string) (Response, error) {
-
-	r := Response{}
-	var command *exec.Cmd
-	if sudo {
-		// -k is used to reset previous sudo timestamps
-		// -S reads password from stdin
-		// -u sets the user
-		// -E preserve user environment when running command
-		command = exec.Command("sudo", "-kSE", "-u", user, "bash", "-c", cmd)
-		command.Stdin = strings.NewReader(l.sudopass + "\n" + stdin + "\n")
-	} else {
-		command = exec.Command("bash", "-c", cmd)
-		command.Stdin = strings.NewReader(stdin + "\n")
-	}
-	o := bytes.Buffer{}
-	e := bytes.Buffer{}
-
-	command.Stdout = &o
-	command.Stderr = &e
-
-	err := command.Run()
-
-	r.Stdout = scrubStd(o.String())
-	r.Stderr = scrubStd(e.String())
-
-	if err != nil {
-		if exitError, ok := err.(*exec.ExitError); ok {
-			r.ExitStatus = exitError.ExitCode()
-		} else {
-			r.ExitStatus = -1
-			return r, errors.Wrapf(err, "could not run command \"%s\"", cmd)
-		}
-	}
-
-	return r, nil
-}
-
 // Host is a remote host one is trying to connect
 type Host struct {
 	r runner
 	// Validate is used to indicate if the host only allows RunCheck, that does not alter the state of the system
 	Validate bool
 	t        trace
-}
-
-// NewLocalHost resturns a host that represents a local host
-func NewLocalHost() *Host {
-	return &Host{&local{}, false, newTrace()}
 }
 
 // String implements io.Stringer for a Host

@@ -47,6 +47,7 @@ func TestNSpaces(t *testing.T) {
 	}
 }
 
+/*
 func TestLocal(t *testing.T) {
 
 	l := local{sudopass: sudopass}
@@ -142,3 +143,4 @@ func TestLocal(t *testing.T) {
 		})
 	}
 }
+*/
