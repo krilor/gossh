@@ -6,7 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/krilor/gossh"
 	"github.com/krilor/gossh/testing/docker"
+	"golang.org/x/crypto/ssh"
 )
 
 func TestRemote(t *testing.T) {
@@ -16,11 +18,11 @@ func TestRemote(t *testing.T) {
 		sudo   bool
 		user   string
 		stdin  string
-		expect Response
+		expect gossh.Response
 	}{
 		{
 			cmd: `echo "hello"`,
-			expect: Response{
+			expect: gossh.Response{
 				Stdout:     "hello",
 				Stderr:     "",
 				ExitStatus: 0,
@@ -28,7 +30,7 @@ func TestRemote(t *testing.T) {
 		},
 		{
 			cmd: `echo -n "hello"`,
-			expect: Response{
+			expect: gossh.Response{
 				Stdout:     "hello",
 				Stderr:     "",
 				ExitStatus: 0,
@@ -36,7 +38,7 @@ func TestRemote(t *testing.T) {
 		},
 		{
 			cmd: `somecommandthatdoesnotexist`,
-			expect: Response{
+			expect: gossh.Response{
 				Stdout:     "",
 				Stderr:     "bash: somecommandthatdoesnotexist: command not found",
 				ExitStatus: 127,
@@ -44,7 +46,7 @@ func TestRemote(t *testing.T) {
 		},
 		{
 			cmd: `cat filethatdoesntexist`,
-			expect: Response{
+			expect: gossh.Response{
 				Stdout:     "",
 				Stderr:     "cat: filethatdoesntexist: No such file or directory",
 				ExitStatus: 1,
@@ -53,7 +55,7 @@ func TestRemote(t *testing.T) {
 		{
 			cmd:   `sed s/a/X/ | sed s/c/Z/`,
 			stdin: "abc",
-			expect: Response{
+			expect: gossh.Response{
 				Stdout:     "XbZ",
 				Stderr:     "",
 				ExitStatus: 0,
@@ -64,7 +66,7 @@ func TestRemote(t *testing.T) {
 			sudo:  true,
 			user:  "root",
 			stdin: "abc",
-			expect: Response{
+			expect: gossh.Response{
 				Stdout:     "XbZ",
 				Stderr:     "",
 				ExitStatus: 0,
@@ -73,7 +75,7 @@ func TestRemote(t *testing.T) {
 		{
 			cmd:  `ls -l /root | grep total | awk '{print \$1}'`, // BUG TOOD - there is a bug here. Why do we have to escape the dollar sign?
 			sudo: true,
-			expect: Response{
+			expect: gossh.Response{
 				Stdout:     "total",
 				Stderr:     "",
 				ExitStatus: 0,
@@ -82,7 +84,7 @@ func TestRemote(t *testing.T) {
 		{
 			cmd:  `echo "test" | sed s/t/b/`,
 			sudo: true,
-			expect: Response{
+			expect: gossh.Response{
 				Stdout:     "best",
 				Stderr:     "",
 				ExitStatus: 0,
@@ -101,7 +103,7 @@ func TestRemote(t *testing.T) {
 		}
 		defer c.Kill()
 
-		r, err := newRemote("localhost", c.Port(), "gossh", "gosshpwd")
+		r, err := New(fmt.Sprintf("localhost:%d", c.Port()), "gossh", "gosshpwd", ssh.InsecureIgnoreHostKey(), ssh.Password("gosshpwd"))
 
 		if err != nil {
 			log.Fatalf("could not connect to throwaway container %v", err)
@@ -144,7 +146,7 @@ func TestRemotePut(t *testing.T) {
 		}
 		defer c.Kill()
 
-		r, err := newRemote("localhost", c.Port(), "gossh", "gosshpwd")
+		r, err := New(fmt.Sprintf("localhost:%d", c.Port()), "gossh", "gosshpwd", ssh.InsecureIgnoreHostKey(), ssh.Password("gosshpwd"))
 
 		if err != nil {
 			log.Fatalf("could not connect to throwaway container %v", err)

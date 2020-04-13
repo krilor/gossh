@@ -6,6 +6,7 @@ import (
 	"log"
 	"os/exec"
 	"os/user"
+	"regexp"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -222,4 +223,12 @@ func (h *Host) fork() *Host {
 	new := *h
 	new.t = new.t.span()
 	return &new
+}
+
+// sudopattern matches sudo prompt
+var sudopattern *regexp.Regexp = regexp.MustCompile(`\[sudo\] password for [^:]+: `)
+
+// scrubStd cleans an out/err string. Removes trailing newline and sudo prompt.
+func scrubStd(in string) string {
+	return sudopattern.ReplaceAllString(strings.Trim(in, "\n"), "")
 }

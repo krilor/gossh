@@ -8,7 +8,9 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/krilor/gossh/rmt"
 	"github.com/krilor/gossh/testing/docker"
+	"golang.org/x/crypto/ssh"
 )
 
 func TestMain(m *testing.M) {
@@ -121,7 +123,7 @@ func TestGather(t *testing.T) {
 			}
 			defer c.Kill()
 
-			h, err := NewRemoteHost("localhost", c.Port(), "gossh", "gosshpwd")
+			h, err := rmt.New(fmt.Sprintf("localhost:%d", c.Port()), "gossh", "gosshpwd", ssh.InsecureIgnoreHostKey(), ssh.Password("gosshpwd"))
 
 			if err != nil {
 				log.Fatalf("could not connect to throwaway container %v", err)

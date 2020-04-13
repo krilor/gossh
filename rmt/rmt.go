@@ -1,25 +1,72 @@
 package rmt
 
-// Package rmt contains functionality for remote targets
-// A remote target is a target that is connected to using SSH
+import (
+	"bytes"
+	"fmt"
+	"io"
+	"net"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
 
+	"github.com/krilor/gossh"
+	"github.com/pkg/errors"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
+)
+
+// Package rmt contains functionality for Remote targets
+// A Remote target is a target that is connected to using SSH
+
+// Remote represents a Remote target, connected to over SSH
 type Remote struct {
+	addr     string
+	conn     *ssh.Client
+	connuser string
+	port     int
+	sudopass string
 }
 
-// Put puts the contents of a Reader on a path on the remote machine
+// New returns a new Remote target from connection details
+func New(addr string, user string, sudopass string, hostkeycallback ssh.HostKeyCallback, auths ...ssh.AuthMethod) (Remote, error) {
+
+	r := Remote{
+		addr:     addr,
+		connuser: user,
+		sudopass: sudopass,
+	}
+
+	cc := ssh.ClientConfig{
+		User:            user,
+		Auth:            auths,
+		HostKeyCallback: hostkeycallback,
+	}
+
+	var err error
+	r.conn, err = ssh.Dial("tcp", addr, &cc)
+	if err != nil {
+		return r, errors.Wrapf(err, "unable to establish ssh connection to %s", addr)
+	}
+
+	return r, nil
+
+}
+
+// Put puts the contents of a Reader on a path on the Remote machine
 //
 // Inspiration:
-// https://github.com/laher/scp-go/blob/master/scp/toremote.go
+// https://github.com/laher/scp-go/blob/master/scp/toRemote.go
 // https://gist.github.com/jedy/3357393
 //
 // SCP notes:
 // https://web.archive.org/web/20170215184048/https://blogs.oracle.com/janp/entry/how_the_scp_protocol_works
 // https://en.wikipedia.org/wiki/Secure_copy#cite_note-Pechanec-2
-func (r *remote) put(content io.Reader, size int64, path string, mode uint32) error {
+func (r *Remote) put(content io.Reader, size int64, path string, mode uint32) error {
 
 	// consider using github.com/pkg/sftp
 
-	session, err := r.client.NewSession()
+	session, err := r.conn.NewSession()
 	if err != nil {
 		return errors.Wrap(err, "failed to create scp session")
 	}
@@ -38,67 +85,26 @@ func (r *remote) put(content io.Reader, size int64, path string, mode uint32) er
 		fmt.Fprint(w, "\x00")
 	}()
 
-	if b, err := session.CombinedOutput(fmt.Sprintf("/usr/bin/scp -tr %s", path)); err != nil {
+	if b, err := session.CombinedOutput(fmt.Sprintf("/connuser/bin/scp -tr %s", path)); err != nil {
 		return errors.Wrapf(err, "unable to copy content: %s", string(b))
 	}
 
 	return nil
 }
 
-type remote struct {
-	client   *ssh.Client
-	addr     string
-	port     int
-	usr      string
-	sudopass string
+func (r *Remote) user() string {
+	return r.connuser
 }
 
-func (r *remote) user() string {
-	return r.usr
+func (r *Remote) String() string {
+	return fmt.Sprintf("%s@%s:%d", r.connuser, r.addr, r.port)
 }
 
-func (r *remote) String() string {
-	return fmt.Sprintf("%s@%s:%d", r.usr, r.addr, r.port)
-}
+// run runs cmd on Remote
+func (r *Remote) run(cmd string, stdin string, sudo bool, user string) (gossh.Response, error) {
 
-func newRemote(addr string, port int, user string, sudopass string) (*remote, error) {
-	r := remote{
-		addr:     addr,
-		port:     port,
-		usr:      user,
-		sudopass: sudopass,
-	}
-
-	var err error
-
-	a, err := getAgentAuths()
-	auths := []ssh.AuthMethod{
-		ssh.Password(sudopass),
-	}
-	if err == nil {
-		auths = append(auths, a)
-	}
-
-	cc := ssh.ClientConfig{
-		User:            user,
-		Auth:            auths,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // TODO
-	}
-
-	r.client, err = ssh.Dial("tcp", fmt.Sprintf("%s:%d", addr, port), &cc)
-	if err != nil {
-		return &r, errors.Wrapf(err, "unable to establish connection to %s:%d", addr, port)
-	}
-
-	return &r, nil
-
-}
-
-// run runs cmd on remote
-func (r *remote) run(cmd string, stdin string, sudo bool, user string) (Response, error) {
-
-	session, err := r.client.NewSession()
-	resp := Response{}
+	session, err := r.conn.NewSession()
+	resp := gossh.Response{}
 
 	if err != nil {
 		return resp, errors.Wrap(err, "unable to create new session")
@@ -146,32 +152,25 @@ func (r *remote) run(cmd string, stdin string, sudo bool, user string) (Response
 	return resp, nil
 }
 
-}
-
-
-// getAgentAuths is a helper function to get SSH keys from an ssh agent
-func getAgentAuths() (ssh.AuthMethod, error) {
+// AgentAuths is a helper function to get SSH keys from an ssh agent
+func AgentAuths() (ssh.AuthMethod, error) {
 
 	socket := os.Getenv("SSH_AUTH_SOCK")
 	conn, err := net.Dial("unix", socket)
 	if err != nil {
 		return nil, errors.Wrapf(err, "Failed to open SSH_AUTH_SOCK")
 	}
+	defer conn.Close()
 
 	agentClient := agent.NewClient(conn)
-
+	// TODO how do we close these clients?
 	return ssh.PublicKeysCallback(agentClient.Signers), nil
 }
 
+// sudopattern matches sudo prompt
+var sudopattern *regexp.Regexp = regexp.MustCompile(`\[sudo\] password for [^:]+: `)
 
-// NewRemoteHost returns a Host based on address, port and user
-// It will connect to the SSH agent to get any ssh keys
-func NewRemoteHost(addr string, port int, user string, sudopass string) (*Host, error) {
-	r, err := newRemote(addr, port, user, sudopass)
-
-	if err != nil {
-		return &Host{}, err
-	}
-
-	return &Host{r, false, newTrace()}, nil
+// scrubStd cleans an out/err string. Removes trailing newline and sudo prompt.
+func scrubStd(in string) string {
+	return sudopattern.ReplaceAllString(strings.Trim(in, "\n"), "")
 }

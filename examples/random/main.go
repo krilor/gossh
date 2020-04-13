@@ -6,10 +6,12 @@ import (
 	"os"
 
 	"github.com/krilor/gossh"
+	"github.com/krilor/gossh/rmt"
 	"github.com/krilor/gossh/rules/x/apt"
 	"github.com/krilor/gossh/rules/x/base"
 	"github.com/krilor/gossh/rules/x/file"
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/ssh"
 )
 
 func main() {
@@ -26,7 +28,7 @@ func main() {
 
 	// Add a host to the inventory
 	// As of now, it's hardcoded to a docker container on localhost
-	m, err := gossh.NewRemoteHost("localhost", 2222, "gossh", "gosshpwd")
+	m, err := rmt.New("localhost:2222", "gossh", "gosshpwd", ssh.InsecureIgnoreHostKey(), ssh.Password("gosshpwd"))
 	if err != nil {
 		fmt.Printf("could not get new host %v: %v\n", m, err)
 		return
