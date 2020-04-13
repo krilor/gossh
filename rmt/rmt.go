@@ -151,15 +151,16 @@ func (r *Remote) put(content io.Reader, size int64, path string, mode uint32) er
 		fmt.Fprint(w, "\x00")
 	}()
 
-	if b, err := session.CombinedOutput(fmt.Sprintf("/connuser/bin/scp -tr %s", path)); err != nil {
+	if b, err := session.CombinedOutput(fmt.Sprintf("/usr/bin/scp -tr %s", path)); err != nil {
 		return errors.Wrapf(err, "unable to copy content: %s", string(b))
 	}
 
 	return nil
 }
 
-func (r *Remote) user() string {
-	return r.connuser
+// User returns the currently active user
+func (r Remote) User() string {
+	return r.activeuser
 }
 
 func (r *Remote) String() string {
