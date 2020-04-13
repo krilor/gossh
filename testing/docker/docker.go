@@ -45,6 +45,7 @@ type Container struct {
 	name   string
 	port   int
 	killed bool
+	image  string
 }
 
 // Kill issues 'docker kill' on the container
@@ -57,6 +58,16 @@ func (c *Container) Kill() error {
 	}
 
 	return nil
+}
+
+// Addr is a handy function for getting the container address string localhost:port
+func (c *Container) Addr() string {
+	return fmt.Sprintf("localhost:%d", c.port)
+}
+
+// Image returns the image name
+func (c *Container) Image() string {
+	return c.image
 }
 
 // Exec issues 'docker exec' to the container.
@@ -110,7 +121,9 @@ func (c *Container) NewSSHClient(user string) (*ssh.Client, error) {
 // New creates runs a docker container with ssh enabled.
 func New(image Image) (*Container, error) {
 
-	c := Container{}
+	c := Container{
+		image: image.Name(),
+	}
 
 	cmd := exec.Command("docker", "build", "-t", image.Name(), "-")
 	cmd.Stdin = strings.NewReader(string(image.Dockerfile()))

@@ -10,8 +10,8 @@ import (
 
 func TestDockerThrowaway(t *testing.T) {
 
-	for key, img := range FullBench {
-		t.Run(key, func(t *testing.T) {
+	for _, img := range FullBench {
+		t.Run(img.Name(), func(t *testing.T) {
 
 			c, err := New(img)
 

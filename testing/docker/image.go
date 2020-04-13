@@ -148,45 +148,46 @@ func Fedora(version int) Image {
 }
 
 // Bench is
-var Bench map[string]Image = map[string]Image{
-	"fedora:33": Fedora(33),
+var Bench []Image = []Image{
+	Ubuntu("bionic"),
+	CentOS(7),
 }
 
 // FullBench is a map of images that can be used as a test bench.
-var FullBench map[string]Image = map[string]Image{
+var FullBench []Image = []Image{
 
 	// Debian - https://hub.docker.com/_/debian
-	"debian:bullseye": Debian("bullseye"),
-	"debian:buster":   Debian("buster"),
-	"debian:stretch":  Debian("stretch"),
+	Debian("bullseye"),
+	Debian("buster"),
+	Debian("stretch"),
 
 	// Ubuntu - https://hub.docker.com/_/ubuntu
-	"ubuntu:bionic": Ubuntu("bionic"), // 18
-	"ubuntu:eoan":   Ubuntu("eoan"),   // 19
-	"ubuntu:focal":  Ubuntu("focal"),  // 20
-	"ubuntu:trusty": Ubuntu("trusty"), // 16
-	"ubuntu:xenial": Ubuntu("xenial"), // 14
+	Ubuntu("bionic"), // 18
+	Ubuntu("eoan"),   // 19
+	Ubuntu("focal"),  // 20
+	Ubuntu("trusty"), // 16
+	Ubuntu("xenial"), // 14
 
 	// CentOS - https://hub.docker.com/_/centos
-	"centos:7": CentOS(7),
-	"centos:6": CentOS(6),
+	CentOS(7),
+	CentOS(6),
 
 	// RedHat - https://catalog.redhat.com/software/containers/search?q=rhel&p=1&vendor_name=Red%20Hat%2C%20Inc.&build_categories_list=Base%20Image&product=Red%20Hat%20Enterprise%20Linux&release_categories=Generally%20Available&rows=60
-	"rhel:6": RedHat(6),
-	"rhel:7": RedHat(7),
+	RedHat(6),
+	RedHat(7),
 
 	// Oracle Linux - https://hub.docker.com/_/oraclelinux/
-	"ol:6": Oracle(6),
-	"ol:7": Oracle(7),
-	"ol:8": Oracle(8),
+	Oracle(6),
+	Oracle(7),
+	Oracle(8),
 
 	// Fedora - https://hub.docker.com/_/fedora
-	"fedora:26": Fedora(26),
-	"fedora:27": Fedora(27),
-	"fedora:28": Fedora(28),
-	"fedora:29": Fedora(29),
-	"fedora:30": Fedora(30),
-	"fedora:31": Fedora(31),
-	"fedora:32": Fedora(32),
-	"fedora:33": Fedora(33),
+	Fedora(26),
+	Fedora(27),
+	Fedora(28),
+	Fedora(29),
+	Fedora(30),
+	Fedora(31),
+	Fedora(32),
+	Fedora(33),
 }

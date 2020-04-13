@@ -7,10 +7,6 @@ import (
 	"os"
 	"reflect"
 	"testing"
-
-	"github.com/krilor/gossh/rmt"
-	"github.com/krilor/gossh/testing/docker"
-	"golang.org/x/crypto/ssh"
 )
 
 func TestMain(m *testing.M) {
@@ -77,6 +73,7 @@ func TestMajorVersion(t *testing.T) {
 	}
 }
 
+/*
 func TestGather(t *testing.T) {
 
 	var tests = []struct {
@@ -143,4 +140,4 @@ func TestGather(t *testing.T) {
 		})
 	}
 
-}
+}*/

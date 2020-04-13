@@ -1,8 +1,10 @@
 package rmt
 
 import (
+	"flag"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"testing"
 
@@ -11,7 +13,89 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+var containers []*docker.Container
+
+func TestMain(m *testing.M) {
+
+	// need to parse flags for testing.Short()
+	flag.Parse()
+
+	// setup
+	var imgs []docker.Image
+	if testing.Short() {
+		imgs = docker.Bench
+	} else {
+		imgs = docker.FullBench
+	}
+
+	for _, img := range imgs {
+		log.Println("creating container: ", img.Name())
+		c, err := docker.New(img)
+		if err != nil {
+			log.Fatalf("unable to create container %s", img.Name())
+		}
+		containers = append(containers, c)
+	}
+
+	// run tests
+	code := m.Run()
+
+	// teardown
+	for _, c := range containers {
+		log.Println("killing container:", c.Image())
+		c.Kill()
+	}
+
+	os.Exit(code)
+
+}
+
+func TestMkdir(t *testing.T) {
+
+	tests := []struct {
+		activeuser string
+		path       string
+		shouldfail bool
+	}{
+		{"root", "/root/testmkdir1", false},
+		{"hobgob", "/root/testmkdir2", true},
+		{"gossh", "/home/gossh/testmkdir3", false},
+	}
+
+	for _, c := range containers {
+		r, err := New(c.Addr(), "gossh", "gosshpwd", ssh.InsecureIgnoreHostKey(), ssh.Password("gosshpwd"))
+		if err != nil {
+			t.Fatal("could not connect to container:", err)
+		}
+		defer r.Close()
+		for _, test := range tests {
+			t.Run(fmt.Sprintf("%s:%s:%s:%v", c.Image(), test.activeuser, test.path, test.shouldfail), func(t *testing.T) {
+
+				r.activeuser = test.activeuser
+				err = r.Mkdir(test.path)
+				if err != nil && !test.shouldfail {
+					t.Error("test file creation errored", err)
+				} else if err == nil && test.shouldfail {
+					t.Error("test didn't erorr as expected")
+				}
+
+				if !test.shouldfail {
+					o, _, _, _ := c.Exec("stat --format='%U' " + test.path)
+					if o != test.activeuser {
+						t.Errorf("wrong ownership. got %s", o)
+					}
+				}
+			})
+		}
+	}
+
+}
+
 func TestRemote(t *testing.T) {
+
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
 
 	var tests = []struct {
 		cmd    string
@@ -133,6 +217,9 @@ func TestRemote(t *testing.T) {
 }
 
 func TestRemotePut(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skipping in short mode")
+	}
 	var tests = []string{"lionking"}
 
 	for _, img := range []docker.Image{
@@ -171,5 +258,21 @@ func TestRemotePut(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestAs(t *testing.T) {
+	original := Remote{
+		connuser:   "jon",
+		activeuser: "jon",
+	}
+	super := original.As("root")
+
+	if super.activeuser != "root" {
+		t.Errorf("super.activeuser error: expect 'root', got '%s'", super.activeuser)
+	}
+
+	if original.activeuser != "jon" {
+		t.Errorf("original.activeuser error: expect 'jon', got '%s'", original.activeuser)
 	}
 }

@@ -11,7 +11,9 @@ import (
 	"strings"
 
 	"github.com/krilor/gossh"
+	"github.com/krilor/gossh/rmt/suftp"
 	"github.com/pkg/errors"
+	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/agent"
 )
@@ -21,20 +23,30 @@ import (
 
 // Remote represents a Remote target, connected to over SSH
 type Remote struct {
-	addr     string
+	addr string
+
+	// auth
 	conn     *ssh.Client
 	connuser string
-	port     int
+	// sudopass is connusers sudo password
 	sudopass string
+
+	// the user currently operating as
+	activeuser string
+
+	// sftp holds all sftp connections. key is username. Pointer?
+	sftp map[string]*sftp.Client
 }
 
 // New returns a new Remote target from connection details
 func New(addr string, user string, sudopass string, hostkeycallback ssh.HostKeyCallback, auths ...ssh.AuthMethod) (Remote, error) {
 
 	r := Remote{
-		addr:     addr,
-		connuser: user,
-		sudopass: sudopass,
+		addr:       addr,
+		connuser:   user,
+		sudopass:   sudopass,
+		activeuser: user,
+		sftp:       map[string]*sftp.Client{},
 	}
 
 	cc := ssh.ClientConfig{
@@ -51,6 +63,60 @@ func New(addr string, user string, sudopass string, hostkeycallback ssh.HostKeyC
 
 	return r, nil
 
+}
+
+// Close closes all underlying connections
+func (r Remote) Close() error {
+	for _, c := range r.sftp {
+		c.Close()
+	}
+
+	return r.conn.Close()
+}
+
+// sftpClient returns a sftp client for r.activeuser
+// if client does not exist, it will be created
+func (r Remote) sftpClient() (*sftp.Client, error) {
+	var c *sftp.Client
+	var err error
+	var ok bool
+	c, ok = r.sftp[r.activeuser]
+	if ok {
+		return c, nil
+	}
+	// need to create a new connection
+	if r.sudo() {
+		c, err = suftp.NewSudoClient(r.conn, r.activeuser, r.sudopass)
+	} else {
+		c, err = sftp.NewClient(r.conn)
+	}
+	if err != nil {
+		return nil, errors.Wrapf(err, "could not start sftp connection for %s", r.activeuser)
+	}
+	r.sftp[r.activeuser] = c
+	return c, nil
+}
+
+// sudo reports if operations must be done using sudo
+func (r Remote) sudo() bool {
+	return r.activeuser != r.connuser
+}
+
+// As returns a new Remote that will use the same underlying connections, but all operations will be done as user.
+//
+// No tests are done in this method. If user does not exist or does not have sudo rights, that will only be evident when trying to use methods on the returned object.
+func (r Remote) As(user string) Remote {
+	r.activeuser = user
+	return r
+}
+
+// Mkdir creates a directory in the given path
+func (r Remote) Mkdir(path string) error {
+	sftp, err := r.sftpClient()
+	if err != nil {
+		return err
+	}
+	return sftp.Mkdir(path)
 }
 
 // Put puts the contents of a Reader on a path on the Remote machine
@@ -97,7 +163,7 @@ func (r *Remote) user() string {
 }
 
 func (r *Remote) String() string {
-	return fmt.Sprintf("%s@%s:%d", r.connuser, r.addr, r.port)
+	return fmt.Sprintf("%s@%s", r.connuser, r.addr)
 }
 
 // run runs cmd on Remote
@@ -152,19 +218,21 @@ func (r *Remote) run(cmd string, stdin string, sudo bool, user string) (gossh.Re
 	return resp, nil
 }
 
-// AgentAuths is a helper function to get SSH keys from an ssh agent
-func AgentAuths() (ssh.AuthMethod, error) {
+// AgentAuths is a helper function to get SSH keys from an ssh agent.
+// If any errors occur, an empty PublicKeys ssh.AuthMethod will be returned.
+func AgentAuths() ssh.AuthMethod {
 
 	socket := os.Getenv("SSH_AUTH_SOCK")
 	conn, err := net.Dial("unix", socket)
 	if err != nil {
-		return nil, errors.Wrapf(err, "Failed to open SSH_AUTH_SOCK")
+		return ssh.PublicKeys()
 	}
 	defer conn.Close()
 
 	agentClient := agent.NewClient(conn)
+
 	// TODO how do we close these clients?
-	return ssh.PublicKeysCallback(agentClient.Signers), nil
+	return ssh.PublicKeysCallback(agentClient.Signers)
 }
 
 // sudopattern matches sudo prompt
