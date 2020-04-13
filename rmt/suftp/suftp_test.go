@@ -3,6 +3,7 @@ package suftp
 import (
 	"fmt"
 	"log"
+	"strings"
 	"testing"
 
 	"github.com/krilor/gossh/testing/docker"
@@ -15,15 +16,16 @@ func TestSudoSftp(t *testing.T) {
 		sudo    string // the user to sudo to
 		sudopwd string // users sudopassword
 		file    string // file path to create
+		errend  string // the end of a error string. empty if no error.
 	}{
-		{"gossh", "hobgob", "gosshpwd", "/home/hobgob/somefile"},
-		{"gossh", "root", "gosshpwd", "/root/somefile"},
-		{"hobgob", "gossh", "", "/home/gossh/somefile"},
-		{"hobgob", "gossh", "hobgobpwd", "/home/gossh/somefile2"},
-		{"hobgob", "root", "", "/root/anotherfile"},
-		{"hobgob", "", "", "/root/anotherfile2"},
-		{"joxter", "stinky", "joxterpwd", "/home/stinky/joxterfile"},
-		// TODO negative test cases
+		{"gossh", "hobgob", "gosshpwd", "/home/hobgob/somefile", ""},
+		{"gossh", "root", "gosshpwd", "/root/somefile", ""},
+		{"hobgob", "gossh", "", "/home/gossh/somefile", ""},
+		{"hobgob", "gossh", "hobgobpwd", "/home/gossh/somefile2", ""},
+		{"hobgob", "root", "", "/root/anotherfile", ""},
+		{"hobgob", "", "", "/root/anotherfile2", ""},
+		{"joxter", "stinky", "joxterpwd", "/home/stinky/joxterfile", ""},
+		{"stinky", "gossh", "stinkypwd", "/home/gossh/stinkyfile", "sudo failed"},
 	}
 
 	for _, img := range docker.FullBench {
@@ -45,7 +47,18 @@ func TestSudoSftp(t *testing.T) {
 
 				sftp, err := NewSudoClient(conn, test.sudo, test.sudopwd)
 				if err != nil {
-					t.Fatal("could not get sudo connection:", err)
+					if test.errend != "" {
+						// error was expected
+						if strings.HasSuffix(err.Error(), test.errend) {
+							// correct error - skip the test of the test
+							t.SkipNow()
+						} else {
+							t.Fatalf("wrong error string: expect end as %s, got %s", test.errend, err.Error())
+						}
+					} else {
+						// errors was not expected
+						t.Fatal("could not get sudo connection:", err)
+					}
 				}
 				defer sftp.Close()
 

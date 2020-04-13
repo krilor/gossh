@@ -76,9 +76,9 @@ RUN ssh-keygen -q -N "" -t dsa -f /etc/ssh/ssh_host_dsa_key && \
 // https://ask.fedoraproject.org/t/sudo-setrlimit-rlimit-core-operation-not-permitted/4223
 // https://bugs.launchpad.net/ubuntu/+source/sudo/+bug/1857036
 // https://bugzilla.redhat.com/show_bug.cgi?id=1773148
+// RUN echo "Set disable_coredump false" >> /etc/sudo.conf
 
 var commonInstructions string = `
-RUN echo "Set disable_coredump false" >> /etc/sudo.conf
 RUN echo "Defaults lecture = never" >> /etc/sudoers.d/0_privacy
 
 RUN echo 'root:rootpwd' | chpasswd
