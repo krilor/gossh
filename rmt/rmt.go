@@ -1,7 +1,6 @@
 package rmt
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"net"
@@ -10,8 +9,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/krilor/gossh"
 	"github.com/krilor/gossh/rmt/suftp"
+	"github.com/krilor/gossh/sh"
 	"github.com/pkg/errors"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
@@ -85,7 +84,7 @@ func (r Remote) sftpClient() (*sftp.Client, error) {
 		return c, nil
 	}
 	// need to create a new connection
-	if r.sudo() {
+	if r.Sudo() {
 		c, err = suftp.NewSudoClient(r.conn, r.activeuser, r.sudopass)
 	} else {
 		c, err = sftp.NewClient(r.conn)
@@ -97,8 +96,8 @@ func (r Remote) sftpClient() (*sftp.Client, error) {
 	return c, nil
 }
 
-// sudo reports if operations must be done using sudo
-func (r Remote) sudo() bool {
+// Sudo reports if operations must be done using sudo, i.e. if active user is not the connected user.
+func (r Remote) Sudo() bool {
 	return r.activeuser != r.connuser
 }
 
@@ -163,43 +162,35 @@ func (r Remote) User() string {
 	return r.activeuser
 }
 
-func (r *Remote) String() string {
+// String implements fmt.Stringer
+func (r Remote) String() string {
 	return fmt.Sprintf("%s@%s", r.connuser, r.addr)
 }
 
-// run runs cmd on Remote
-func (r *Remote) run(cmd string, stdin string, sudo bool, user string) (gossh.Response, error) {
+// Run executes cmd on Remote with the currently active user and returns the response.
+// Reader stdin is used to add stdin.
+func (r Remote) Run(cmd string, stdin io.Reader) (sh.Response, error) {
+	if r.Sudo() {
+		return r.runsudo(cmd, stdin)
+	}
+	return r.run(cmd, stdin)
+}
 
+// run run cmd on remote
+func (r Remote) run(cmd string, stdin io.Reader) (sh.Response, error) {
 	session, err := r.conn.NewSession()
-	resp := gossh.Response{}
+	resp := sh.Response{}
 
 	if err != nil {
 		return resp, errors.Wrap(err, "unable to create new session")
 	}
 	defer session.Close()
 
-	o := bytes.Buffer{}
-	e := bytes.Buffer{}
+	session.Stdout = &resp.Stdout
+	session.Stderr = &resp.Stderr
+	session.Stdin = stdin
 
-	session.Stdout = &o
-	session.Stderr = &e
-
-	// TODO - consider using session.Shell - http://networkbit.ch/golang-ssh-client/#multiple_commands
-	if sudo {
-		session.Stdin = strings.NewReader(r.sudopass + "\n" + stdin + "\n")
-		if user == "" || user == "-" {
-			user = "root"
-		}
-		sudocmd := fmt.Sprintf(`sudo -k -S -u %s bash -c "%s"`, user, cmd)
-		err = session.Run(sudocmd)
-
-	} else {
-		session.Stdin = strings.NewReader(stdin + "\n")
-		err = session.Run(cmd)
-	}
-
-	resp.Stdout = scrubStd(o.String())
-	resp.Stderr = scrubStd(e.String())
+	err = session.Run(cmd)
 
 	if err != nil {
 
@@ -210,6 +201,48 @@ func (r *Remote) run(cmd string, stdin string, sudo bool, user string) (gossh.Re
 			resp.ExitStatus = -1
 		default:
 			return resp, errors.Wrap(err, "run of command failed")
+		}
+
+	} else {
+		resp.ExitStatus = 0
+	}
+
+	return resp, nil
+}
+
+// runsudo runs cmd on Remote as sudo / activeuser
+func (r Remote) runsudo(cmd string, stdin io.Reader) (sh.Response, error) {
+
+	session, err := r.conn.NewSession()
+	resp := sh.Response{}
+
+	if err != nil {
+		return resp, errors.Wrap(err, "unable to create new session")
+	}
+	defer session.Close()
+
+	sudo := sh.NewSudo(cmd, r.activeuser, r.sudopass, stdin)
+
+	session.Stdout = &resp.Stdout
+	session.Stderr = sudo
+	sudo.StdinPipe, err = session.StdinPipe()
+	sudo.Stderr = &resp.Stderr
+
+	err = session.Run(sudo.Cmd())
+
+	if err != nil {
+
+		switch t := err.(type) {
+		case *ssh.ExitError:
+			resp.ExitStatus = t.Waitmsg.ExitStatus()
+		case *ssh.ExitMissingError:
+			resp.ExitStatus = -1
+		default:
+			return resp, errors.Wrap(err, "run of command failed")
+		}
+
+		if sudo.WrongPwd() {
+			return resp, errors.Wrap(err, "wrong sudo password")
 		}
 
 	} else {

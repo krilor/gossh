@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/krilor/gossh"
 	"github.com/krilor/gossh/testing/docker"
 	"golang.org/x/crypto/ssh"
 )
@@ -93,8 +92,14 @@ func TestMkdir(t *testing.T) {
 
 func TestRemote(t *testing.T) {
 
-	if testing.Short() {
-		t.Skip("skipping in short mode")
+	/*if testing.Short() {
+		//	t.Skip("skipping in short mode")
+	}*/
+
+	type resp struct {
+		Stdout     string
+		Stderr     string
+		ExitStatus int
 	}
 
 	var tests = []struct {
@@ -102,19 +107,19 @@ func TestRemote(t *testing.T) {
 		sudo   bool
 		user   string
 		stdin  string
-		expect gossh.Response
+		expect resp
 	}{
 		{
-			cmd: `echo "hello"`,
-			expect: gossh.Response{
+			cmd: `printf "hello"`,
+			expect: resp{
 				Stdout:     "hello",
 				Stderr:     "",
 				ExitStatus: 0,
 			},
 		},
 		{
-			cmd: `echo -n "hello"`,
-			expect: gossh.Response{
+			cmd: `printf "hello"`,
+			expect: resp{
 				Stdout:     "hello",
 				Stderr:     "",
 				ExitStatus: 0,
@@ -122,7 +127,7 @@ func TestRemote(t *testing.T) {
 		},
 		{
 			cmd: `somecommandthatdoesnotexist`,
-			expect: gossh.Response{
+			expect: resp{
 				Stdout:     "",
 				Stderr:     "bash: somecommandthatdoesnotexist: command not found",
 				ExitStatus: 127,
@@ -130,7 +135,7 @@ func TestRemote(t *testing.T) {
 		},
 		{
 			cmd: `cat filethatdoesntexist`,
-			expect: gossh.Response{
+			expect: resp{
 				Stdout:     "",
 				Stderr:     "cat: filethatdoesntexist: No such file or directory",
 				ExitStatus: 1,
@@ -139,7 +144,7 @@ func TestRemote(t *testing.T) {
 		{
 			cmd:   `sed s/a/X/ | sed s/c/Z/`,
 			stdin: "abc",
-			expect: gossh.Response{
+			expect: resp{
 				Stdout:     "XbZ",
 				Stderr:     "",
 				ExitStatus: 0,
@@ -150,16 +155,16 @@ func TestRemote(t *testing.T) {
 			sudo:  true,
 			user:  "root",
 			stdin: "abc",
-			expect: gossh.Response{
+			expect: resp{
 				Stdout:     "XbZ",
 				Stderr:     "",
 				ExitStatus: 0,
 			},
 		},
 		{
-			cmd:  `ls -l /root | grep total | awk '{print \$1}'`, // BUG TOOD - there is a bug here. Why do we have to escape the dollar sign?
+			cmd:  `ls -l /root | grep total | awk '{print $1}'`,
 			sudo: true,
-			expect: gossh.Response{
+			expect: resp{
 				Stdout:     "total",
 				Stderr:     "",
 				ExitStatus: 0,
@@ -168,7 +173,7 @@ func TestRemote(t *testing.T) {
 		{
 			cmd:  `echo "test" | sed s/t/b/`,
 			sudo: true,
-			expect: gossh.Response{
+			expect: resp{
 				Stdout:     "best",
 				Stderr:     "",
 				ExitStatus: 0,
@@ -196,16 +201,19 @@ func TestRemote(t *testing.T) {
 		for _, test := range tests {
 			t.Run(fmt.Sprintf("%s %s %s %v %s", img.Name(), test.cmd, test.stdin, test.sudo, test.user), func(t *testing.T) {
 
-				got, err := r.run(test.cmd, test.stdin, test.sudo, test.user)
+				if test.user != "" {
+					r.activeuser = test.user
+				}
+				got, err := r.Run(test.cmd, strings.NewReader(test.stdin))
 				if err != nil {
 					t.Errorf("errored: %v", err)
 				}
 
-				if got.Stdout != test.expect.Stdout {
-					t.Errorf("stdout: got \"%s\" - expect \"%s\"", got.Stdout, test.expect.Stdout)
+				if got.Out() != test.expect.Stdout {
+					t.Errorf("stdout: got \"%s\" - expect \"%s\"", got.Stdout.String(), test.expect.Stdout)
 				}
-				if got.Stderr != test.expect.Stderr {
-					t.Errorf("stderr: got \"%s\" - expect \"%s\"", got.Stderr, test.expect.Stderr)
+				if got.Err() != test.expect.Stderr {
+					t.Errorf("stderr: got \"%s\" - expect \"%s\"", got.Stderr.String(), test.expect.Stderr)
 				}
 				if got.ExitStatus != test.expect.ExitStatus {
 					t.Errorf("exitstatus: got \"%d\" - expect \"%d\"", got.ExitStatus, test.expect.ExitStatus)
