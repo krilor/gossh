@@ -25,8 +25,8 @@ type Target interface {
 	// Run runs cmd on Target, using bash.
 	//
 	// Stdin can be used to add stdin to the commmand.
-	// If no stdin is required, pass an empty bytes.Buffer{}.
-	Run(cmd string, stdin io.Reader) (sh.Response, error)
+	// Targets should handle that stdin is nil, i.e. no stdin.
+	Run(cmd string, stdin io.Reader) (sh.Response, error) // TODO response should be interface..
 
 	// Mkdir creates the specified directory.
 	// An error will be returned if a file or directory with the specified path already exists,
