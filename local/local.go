@@ -1,13 +1,13 @@
 package local
 
 import (
-	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
 
-	"github.com/krilor/gossh"
+	"github.com/krilor/gossh/sh"
 	"github.com/pkg/errors"
 )
 
@@ -47,60 +47,80 @@ func (l Local) As(user string) Local {
 	return l
 }
 
-// sudo reports if sudo is required
-func (l Local) sudo() bool {
+// Sudo reports if sudo is required
+func (l Local) Sudo() bool {
 	return l.user != l.activeuser
 }
 
-// run cmd
-// refs:
-// https://stackoverflow.com/a/30329351 - shell
-// https://stackoverflow.com/a/24095983 - sudo
-// https://stackoverflow.com/a/55055100 - exit status
-func (l Local) run(cmd string, stdin string, sudo bool, user string) (gossh.Response, error) {
-
-	r := gossh.Response{}
-	var command *exec.Cmd
-	if sudo {
-		// -k is used to reset previous sudo timestamps
-		// -S reads password from stdin
-		// -u sets the user
-		// -E preserve user environment when running command
-		command = exec.Command("sudo", "-kSE", "-u", user, "bash", "-c", cmd)
-		command.Stdin = strings.NewReader(l.sudopass + "\n" + stdin + "\n")
-	} else {
-		command = exec.Command("bash", "-c", cmd)
-		command.Stdin = strings.NewReader(stdin + "\n")
+// Run runs cmd
+func (l Local) Run(cmd string, stdin io.Reader) (sh.Response, error) {
+	if l.Sudo() {
+		return l.runsudo(cmd, stdin)
 	}
-	o := bytes.Buffer{}
-	e := bytes.Buffer{}
 
-	command.Stdout = &o
-	command.Stderr = &e
+	return l.run(cmd, stdin)
+}
 
-	err := command.Run()
+// runsudo runs cmd as activeuser using sudo
+func (l Local) runsudo(cmd string, stdin io.Reader) (sh.Response, error) {
 
-	r.Stdout = o.String()
-	r.Stderr = e.String()
+	resp := sh.Response{}
+
+	sudo := sh.NewSudo(cmd, l.activeuser, l.sudopass, stdin)
+	command := exec.Command("sudo", sudo.Args()...)
+
+	var err error
+	command.Stdout = &resp.Stdout
+	command.Stderr = sudo
+	sudo.StdinPipe, err = command.StdinPipe()
+	sudo.Stderr = &resp.Stderr
+
+	err = command.Run()
 
 	if err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
-			r.ExitStatus = exitError.ExitCode()
+			resp.ExitStatus = exitError.ExitCode()
 		} else {
-			r.ExitStatus = -1
-			return r, errors.Wrapf(err, "could not run command \"%s\"", cmd)
+			resp.ExitStatus = -1
+			return resp, errors.Wrapf(err, "could not run command \"%s\"", cmd)
 		}
 	}
 
-	return r, nil
+	return resp, nil
+}
+
+// runsudo runs cmd as activeuser using sudo
+func (l Local) run(cmd string, stdin io.Reader) (sh.Response, error) {
+
+	resp := sh.Response{}
+
+	command := exec.Command("bash", "-c", cmd)
+
+	var err error
+	command.Stdout = &resp.Stdout
+	command.Stderr = &resp.Stderr
+	command.Stdin = stdin
+
+	err = command.Run()
+
+	if err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			resp.ExitStatus = exitError.ExitCode()
+		} else {
+			resp.ExitStatus = -1
+			return resp, errors.Wrapf(err, "could not run command \"%s\"", cmd)
+		}
+	}
+
+	return resp, nil
 }
 
 // Mkdir creates the specified directory
 // Permission bits are set to 0666 before umask.
 func (l Local) Mkdir(path string) error {
-	if l.sudo() {
+	if l.Sudo() {
 		cmd := fmt.Sprintf("mkdir %s", path)
-		_, err := l.run(cmd, "", true, l.activeuser)
+		_, err := l.Run(cmd, nil)
 		return errors.Wrap(err, "mkdir failed")
 	}
 

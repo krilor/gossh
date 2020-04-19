@@ -38,13 +38,29 @@ type Sudo struct {
 }
 
 // Cmd returns a command that contains the command
+// Useful for ssh.Session.Run
 func (s *Sudo) Cmd() string {
-	return fmt.Sprintf(`sudo -p "%s" -S -u %s bash -c '%s & %s'`,
+	return fmt.Sprintf(`sudo -p %s -S -u %s bash -c '>&2 printf %s & %s'`,
 		sudoPwdPrompt,
 		s.user,
-		Escape(`>&2 printf "%s" "`+sudoSuccess+`"`),
+		sudoSuccess,
 		Escape(s.cmd),
 	)
+}
+
+// Args returns all args to the sudo command
+// Useful for os.Exec
+func (s *Sudo) Args() []string {
+	return []string{
+		`-p`,
+		sudoPwdPrompt,
+		`-S`,
+		`-u`,
+		s.user,
+		`bash`,
+		`-c`,
+		fmt.Sprintf(`>&2 printf %s & %s`, sudoSuccess, s.cmd),
+	}
 }
 
 // WrongPwd reports if password prompt was recieved more than once
@@ -64,7 +80,9 @@ func (s *Sudo) Write(p []byte) (int, error) {
 		s.StdinPipe.Write([]byte(s.pwd + "\n"))
 	case sudoSuccess:
 		s.success = true
-		io.Copy(s.StdinPipe, s.stdin)
+		if s.stdin != nil {
+			io.Copy(s.StdinPipe, s.stdin)
+		}
 		s.StdinPipe.Close()
 	}
 

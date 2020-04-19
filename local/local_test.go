@@ -31,8 +31,8 @@ func TestMkdir(t *testing.T) {
 		activeuser string
 		path       string
 	}{
-		{"root", "/tmp/gossh_testmkdir1-" + shortuuid.New()},
 		{l.user, "/tmp/gossh_testmkdir2-" + shortuuid.New()},
+		{"root", "/tmp/gossh_testmkdir1-" + shortuuid.New()},
 	}
 
 	if err != nil {
