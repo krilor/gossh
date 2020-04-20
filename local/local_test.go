@@ -12,6 +12,7 @@ import (
 )
 
 var testsudopass string
+var testdir string
 
 func TestMain(m *testing.M) {
 	// set sudopass
@@ -20,7 +21,20 @@ func TestMain(m *testing.M) {
 		log.Fatal("missing GOSSH_SUDOPASS env variable")
 	}
 
-	os.Exit(m.Run())
+	testdir = fmt.Sprintf("%s/gossh-%s", os.TempDir(), shortuuid.New())
+	err := os.Mkdir(testdir, 0777)
+	if err != nil {
+		log.Fatal("could not create testdir:", testdir, "-", err)
+	}
+
+	code := m.Run()
+
+	err = os.RemoveAll(testdir)
+	if err != nil {
+		log.Fatal("could not clear testdir", testdir, "-", err)
+	}
+
+	os.Exit(code)
 }
 
 func TestMkdir(t *testing.T) {
@@ -31,8 +45,8 @@ func TestMkdir(t *testing.T) {
 		activeuser string
 		path       string
 	}{
-		{l.user, "/tmp/gossh_testmkdir2-" + shortuuid.New()},
-		{"root", "/tmp/gossh_testmkdir1-" + shortuuid.New()},
+		{l.user, testdir + "/gossh_testmkdir2-" + shortuuid.New()},
+		{"root", testdir + "/gossh_testmkdir1-" + shortuuid.New()},
 	}
 
 	if err != nil {
