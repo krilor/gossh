@@ -6,8 +6,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strings"
 
 	"github.com/krilor/gossh/rmt/suftp"
 	"github.com/krilor/gossh/sh"
@@ -252,6 +250,16 @@ func (r Remote) runsudo(cmd string, stdin io.Reader) (sh.Response, error) {
 	return resp, nil
 }
 
+// Create creates file in path with os.O_WRONLY|os.O_CREATE|os.O_TRUNC
+func (r Remote) Create(path string) (io.WriteCloser, error) {
+	sftp, err := r.sftpClient()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get sftp client")
+	}
+
+	return sftp.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
+}
+
 // AgentAuths is a helper function to get SSH keys from an ssh agent.
 // If any errors occur, an empty PublicKeys ssh.AuthMethod will be returned.
 func AgentAuths() ssh.AuthMethod {
@@ -267,12 +275,4 @@ func AgentAuths() ssh.AuthMethod {
 
 	// TODO how do we close these clients?
 	return ssh.PublicKeysCallback(agentClient.Signers)
-}
-
-// sudopattern matches sudo prompt
-var sudopattern *regexp.Regexp = regexp.MustCompile(`\[sudo\] password for [^:]+: `)
-
-// scrubStd cleans an out/err string. Removes trailing newline and sudo prompt.
-func scrubStd(in string) string {
-	return sudopattern.ReplaceAllString(strings.Trim(in, "\n"), "")
 }

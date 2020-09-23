@@ -126,3 +126,12 @@ func (l Local) Mkdir(path string) error {
 
 	return os.Mkdir(path, 0666)
 }
+
+// Create creates the file in path
+func (l Local) Create(path string) (io.WriteCloser, error) {
+	if l.Sudo() {
+		return sudoOpenFile(path, l.activeuser, l.sudopass)
+	}
+
+	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+}
