@@ -41,7 +41,7 @@ type Target interface {
 
 	// Create creates the named file mode 0666 (before umask), truncating it if it already exists.
 	// The file is opened as write only. ( os.O_WRONLY|os.O_CREATE|os.O_TRUNC )
-	// Create(path string) (io.WriteCloser, error)
+	Create(path string) (io.WriteCloser, error)
 
 	// Open opens the named file for reading.
 	// Open(path string) (io.ReadCloser, error)

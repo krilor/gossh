@@ -90,11 +90,7 @@ func TestMkdir(t *testing.T) {
 
 }
 
-func TestRemote(t *testing.T) {
-
-	/*if testing.Short() {
-		//	t.Skip("skipping in short mode")
-	}*/
+func TestRun(t *testing.T) {
 
 	type resp struct {
 		Stdout     string
@@ -181,16 +177,7 @@ func TestRemote(t *testing.T) {
 		},
 	}
 
-	for _, img := range []docker.Image{
-		docker.Ubuntu("bionic"),
-		docker.CentOS(7),
-	} {
-
-		c, err := docker.New(img)
-		if err != nil {
-			log.Fatalf("could not get throwaway container: %v", err)
-		}
-		defer c.Kill()
+	for _, c := range containers {
 
 		r, err := New(fmt.Sprintf("localhost:%d", c.Port()), "gossh", "gosshpwd", ssh.InsecureIgnoreHostKey(), ssh.Password("gosshpwd"))
 
@@ -199,7 +186,7 @@ func TestRemote(t *testing.T) {
 		}
 
 		for _, test := range tests {
-			t.Run(fmt.Sprintf("%s %s %s %v %s", img.Name(), test.cmd, test.stdin, test.sudo, test.user), func(t *testing.T) {
+			t.Run(fmt.Sprintf("%s %s %s %v %s", c.Image(), test.cmd, test.stdin, test.sudo, test.user), func(t *testing.T) {
 
 				if test.user != "" {
 					r.activeuser = test.user
@@ -224,31 +211,19 @@ func TestRemote(t *testing.T) {
 	}
 }
 
-func TestRemotePut(t *testing.T) {
-	if testing.Short() {
-		t.Skip("skipping in short mode")
-	}
+func TestPut(t *testing.T) {
 	var tests = []string{"lionking"}
 
-	for _, img := range []docker.Image{
-		docker.Ubuntu("bionic"),
-		docker.CentOS(7),
-	} {
-
-		c, err := docker.New(img)
-		if err != nil {
-			log.Fatalf("could not get throwaway container: %v", err)
-		}
-		defer c.Kill()
+	for _, c := range containers {
 
 		r, err := New(fmt.Sprintf("localhost:%d", c.Port()), "gossh", "gosshpwd", ssh.InsecureIgnoreHostKey(), ssh.Password("gosshpwd"))
 
 		if err != nil {
-			log.Fatalf("could not connect to throwaway container %v", err)
+			log.Fatal("could not connect to throwaway container:", err)
 		}
 
 		for _, test := range tests {
-			t.Run(test+img.Name(), func(t *testing.T) {
+			t.Run(test+c.Image(), func(t *testing.T) {
 				err := r.put(strings.NewReader(test), int64(len(test)), "/tmp/"+test, 644)
 
 				if err != nil {
@@ -282,5 +257,50 @@ func TestAs(t *testing.T) {
 
 	if original.activeuser != "jon" {
 		t.Errorf("original.activeuser error: expect 'jon', got '%s'", original.activeuser)
+	}
+}
+
+func TestCreate(t *testing.T) {
+	var tests = []struct {
+		path    string
+		user    string
+		content string
+	}{
+		{"/home/gossh/testcreate", "gossh", "filecontent\ntwo lines"},
+		{"/home/stinky/testcreate", "stinky", "filecontent\nthree\n lines"},
+	}
+
+	for _, c := range containers {
+		r, err := New(fmt.Sprintf("localhost:%d", c.Port()), "gossh", "gosshpwd", ssh.InsecureIgnoreHostKey(), ssh.Password("gosshpwd"))
+
+		if err != nil {
+			log.Fatal("could not connect to throwaway container:", err)
+		}
+		for _, test := range tests {
+			t.Run(test.path+c.Image(), func(t *testing.T) {
+
+				r.activeuser = test.user
+
+				f, err := r.Create(test.path)
+				if err != nil {
+					t.Fatal("could not create file", err)
+				}
+				defer f.Close()
+				_, err = f.Write([]byte(test.content))
+				if err != nil {
+					t.Fatal("could not write to file", err)
+				}
+				out, _, _, _ := c.Exec(fmt.Sprintf("cat %s", test.path))
+				if out != test.content {
+					t.Errorf(`wrong content: expect "%s", got "%s"`, test.content, out)
+				}
+
+				out, _, _, _ = c.Exec("stat --format='%U' " + test.path)
+				if out != test.user {
+					t.Errorf("wrong ownership. got %s", out)
+				}
+
+			})
+		}
 	}
 }

@@ -8,7 +8,8 @@ import (
 
 const (
 	sudoPwdPrompt string = "SHOWMETHEMONEY"
-	sudoSuccess   string = "ITSALLGOOD"
+	sudoSuccess   string = "ITISALLGOODNOW"
+	sudoFailed    string = "OHMYTHISISBAAD"
 )
 
 // NewSudo returns a new Sudo
