@@ -130,8 +130,17 @@ func (l Local) Mkdir(path string) error {
 // Create creates the file in path
 func (l Local) Create(path string) (io.WriteCloser, error) {
 	if l.Sudo() {
-		return sudoOpenFile(path, l.activeuser, l.sudopass)
+		return sudoCreate(path, l.activeuser, l.sudopass)
 	}
 
 	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+}
+
+// Open opens a file in path
+func (l Local) Open(path string) (io.ReadCloser, error) {
+	if l.Sudo() {
+		return sudoOpen(path, l.activeuser, l.sudopass)
+	}
+
+	return os.Open(path)
 }

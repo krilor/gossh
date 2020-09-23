@@ -135,3 +135,48 @@ func TestCreate(t *testing.T) {
 	}
 
 }
+
+func TestOpen(t *testing.T) {
+
+	l, err := New(testsudopass)
+	if err != nil {
+		t.Fatal("could not get local:", err)
+	}
+
+	tests := []struct {
+		activeuser string
+		path       string
+		content    string
+	}{
+		{l.user, testdir + "/testopen1", "some\ncontent"},
+		{"root", testdir + "/testopen2", "content"},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
+
+			l.activeuser = test.activeuser
+
+			fc, _ := l.Create(test.path)
+			fc.Write([]byte(test.content))
+			fc.Close()
+
+			f, err := l.Open(test.path)
+			if err != nil {
+				t.Fatal("open errored", err)
+			}
+			defer f.Close()
+
+			content, err := ioutil.ReadAll(f)
+			if err != nil {
+				t.Fatal("could not read from file", err)
+			}
+
+			if string(content) != test.content {
+				t.Errorf(`file content wrong - expect: "%s", got : "%s"`, test.content, string(content))
+			}
+
+		})
+	}
+
+}

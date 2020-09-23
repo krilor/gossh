@@ -44,7 +44,7 @@ type Target interface {
 	Create(path string) (io.WriteCloser, error)
 
 	// Open opens the named file for reading.
-	// Open(path string) (io.ReadCloser, error)
+	Open(path string) (io.ReadCloser, error)
 
 	// Chown changes the user and group of the named path.
 	// Chown(path, username, groupname string) error

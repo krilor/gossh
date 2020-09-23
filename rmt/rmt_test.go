@@ -3,6 +3,7 @@ package rmt
 import (
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -298,6 +299,50 @@ func TestCreate(t *testing.T) {
 				out, _, _, _ = c.Exec("stat --format='%U' " + test.path)
 				if out != test.user {
 					t.Errorf("wrong ownership. got %s", out)
+				}
+
+			})
+		}
+	}
+}
+
+func TestOpen(t *testing.T) {
+	var tests = []struct {
+		path    string
+		user    string
+		content string
+	}{
+		{"/home/gossh/testopen", "gossh", "filecontent"},
+		{"/home/stinky/testopen", "stinky", "filecontent"},
+	}
+
+	for _, c := range containers {
+		r, err := New(fmt.Sprintf("localhost:%d", c.Port()), "gossh", "gosshpwd", ssh.InsecureIgnoreHostKey(), ssh.Password("gosshpwd"))
+
+		if err != nil {
+			log.Fatal("could not connect to throwaway container:", err)
+		}
+		for _, test := range tests {
+			t.Run(test.path+c.Image(), func(t *testing.T) {
+
+				r.activeuser = test.user
+
+				c.Exec(fmt.Sprintf("echo -n \"%s\" > %s && chown %s:%s %s %% && chmod 600 %s", test.content, test.path, test.user, test.user, test.path, test.path))
+
+				f, err := r.Open(test.path)
+				if err != nil {
+					t.Fatal("could not open file", err)
+				}
+				defer f.Close()
+
+				b, err := ioutil.ReadAll(f)
+				if err != nil {
+					t.Fatal("could read from file", err)
+				}
+
+				out := string(b)
+				if out != test.content {
+					t.Errorf(`wrong content: expect "%s", got "%s"`, test.content, out)
 				}
 
 			})

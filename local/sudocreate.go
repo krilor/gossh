@@ -8,8 +8,8 @@ import (
 	"github.com/pkg/errors"
 )
 
-// sudoOpenFile returns a sudoWriteCloser for the path
-func sudoOpenFile(path, user, pwd string) (io.WriteCloser, error) {
+// sudoCreate returns a sudoWriteCloser for the path
+func sudoCreate(path, user, pwd string) (io.WriteCloser, error) {
 
 	s := sudoWriteCloser{}
 
@@ -17,10 +17,7 @@ func sudoOpenFile(path, user, pwd string) (io.WriteCloser, error) {
 	s.cmd = exec.Command("sudo", sudo.Args()...)
 
 	var err error
-	s.stdout, err = s.cmd.StdoutPipe()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get stdout")
-	}
+
 	s.stdin, err = s.cmd.StdinPipe()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get stdin")
@@ -37,9 +34,8 @@ func sudoOpenFile(path, user, pwd string) (io.WriteCloser, error) {
 
 // sudoWriteCloser is a WriteCloser that that uses cat to pipe stdin data to a specified file.
 type sudoWriteCloser struct {
-	stdin  io.WriteCloser
-	stdout io.ReadCloser
-	cmd    *exec.Cmd
+	stdin io.WriteCloser
+	cmd   *exec.Cmd
 }
 
 func (s *sudoWriteCloser) Write(p []byte) (n int, err error) {

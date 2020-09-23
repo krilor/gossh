@@ -260,6 +260,16 @@ func (r Remote) Create(path string) (io.WriteCloser, error) {
 	return sftp.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
 }
 
+// Open opens the named file for reading.
+func (r Remote) Open(path string) (io.ReadCloser, error) {
+	sftp, err := r.sftpClient()
+	if err != nil {
+		return nil, errors.Wrap(err, "could not get sftp client")
+	}
+
+	return sftp.Open(path)
+}
+
 // AgentAuths is a helper function to get SSH keys from an ssh agent.
 // If any errors occur, an empty PublicKeys ssh.AuthMethod will be returned.
 func AgentAuths() ssh.AuthMethod {
