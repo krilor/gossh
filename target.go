@@ -46,14 +46,14 @@ type Target interface {
 	// Open opens the named file for reading.
 	Open(path string) (io.ReadCloser, error)
 
+	// Append returns a writer that appends to path.
+	Append(path string) (io.WriteCloser, error)
+
 	// Chown changes the user and group of the named path.
 	// Chown(path, username, groupname string) error
 
 	// Chmod changes the mode of the file to mode.
 	// Chmod(path string, mode os.FileMode) error
-
-	// Append returns a writer that appends to path.
-	// Append(path string) (io.WriteCloser, error)
 
 	// Lstat returns a FileInfo structure describing the file specified by path.
 	// If path is a symbolic link, the returned FileInfo structure describes the symbolic link.

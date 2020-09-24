@@ -349,3 +349,50 @@ func TestOpen(t *testing.T) {
 		}
 	}
 }
+
+func TestAppend(t *testing.T) {
+	originalcontent := "some orgig content\nwith\nnewlines"
+	var tests = []struct {
+		path    string
+		user    string
+		content string
+	}{
+		{"/home/gossh/testopen", "gossh", "filecontent"},
+		{"/home/stinky/testopen", "stinky", "filecontentstinky"},
+	}
+
+	for _, c := range containers {
+		r, err := New(fmt.Sprintf("localhost:%d", c.Port()), "gossh", "gosshpwd", ssh.InsecureIgnoreHostKey(), ssh.Password("gosshpwd"))
+
+		if err != nil {
+			log.Fatal("could not connect to throwaway container:", err)
+		}
+		for _, test := range tests {
+			t.Run(test.path+c.Image(), func(t *testing.T) {
+
+				r.activeuser = test.user
+
+				c.Exec(fmt.Sprintf("echo -n \"%s\" > %s && chown %s:%s %s %% && chmod 600 %s", originalcontent, test.path, test.user, test.user, test.path, test.path))
+
+				f, err := r.Append(test.path)
+				if err != nil {
+					t.Fatal("could not open file", err)
+				}
+				defer f.Close()
+
+				_, err = f.Write([]byte(test.content))
+				if err != nil {
+					t.Fatal("could not write to file", err)
+				}
+
+				expectedcontent := originalcontent + test.content
+
+				out, _, _, _ := c.Exec(fmt.Sprintf("cat %s", test.path))
+				if out != expectedcontent {
+					t.Errorf(`wrong content: expect "%s", got "%s"`, expectedcontent, out)
+				}
+
+			})
+		}
+	}
+}

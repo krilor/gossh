@@ -8,19 +8,34 @@ import (
 	"github.com/pkg/errors"
 )
 
-// sudoCreate returns a sudoWriteCloser for the path
-func sudoCreate(path, user, pwd string) (io.WriteCloser, error) {
+type sudoOpenMode string
 
-	s := sudoWriteCloser{}
+const (
+	modeCreate sudoOpenMode = ">"
+	modeAppend sudoOpenMode = ">>"
+	modeRead   sudoOpenMode = ""
+)
 
-	sudo := sh.NewSudo("cat > "+path, user, pwd, nil)
+// sudoOpen returns a sudoWriteCloser for the path
+func sudoOpen(path, user, pwd string, mode sudoOpenMode) (*sudoReadWriteCloser, error) {
+
+	s := sudoReadWriteCloser{}
+
+	sudo := sh.NewSudo("cat "+string(mode)+" "+path, user, pwd, nil)
 	s.cmd = exec.Command("sudo", sudo.Args()...)
 
 	var err error
 
-	s.stdin, err = s.cmd.StdinPipe()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get stdin")
+	if mode == modeRead {
+		s.stdout, err = s.cmd.StdoutPipe()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get stdin")
+		}
+	} else {
+		s.stdin, err = s.cmd.StdinPipe()
+		if err != nil {
+			return nil, errors.Wrap(err, "could not get stdin")
+		}
 	}
 
 	err = s.cmd.Start()
@@ -33,17 +48,29 @@ func sudoCreate(path, user, pwd string) (io.WriteCloser, error) {
 }
 
 // sudoWriteCloser is a WriteCloser that that uses cat to pipe stdin data to a specified file.
-type sudoWriteCloser struct {
-	stdin io.WriteCloser
-	cmd   *exec.Cmd
+type sudoReadWriteCloser struct {
+	stdin  io.WriteCloser
+	stdout io.ReadCloser
+	cmd    *exec.Cmd
 }
 
-func (s *sudoWriteCloser) Write(p []byte) (n int, err error) {
+func (s *sudoReadWriteCloser) Write(p []byte) (n int, err error) {
 	return s.stdin.Write(p)
 }
 
-func (s *sudoWriteCloser) Close() error {
-	err := s.stdin.Close()
+func (s *sudoReadWriteCloser) Read(p []byte) (n int, err error) {
+	return s.stdout.Read(p)
+}
+
+func (s *sudoReadWriteCloser) Close() error {
+
+	var err error
+	if s.stdin != nil {
+		err = s.stdin.Close()
+	} else {
+		err = s.stdout.Close()
+	}
+
 	if err != nil {
 		return errors.Wrap(err, "unable to close stdin")
 	}

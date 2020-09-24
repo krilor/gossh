@@ -130,7 +130,7 @@ func (l Local) Mkdir(path string) error {
 // Create creates the file in path
 func (l Local) Create(path string) (io.WriteCloser, error) {
 	if l.Sudo() {
-		return sudoCreate(path, l.activeuser, l.sudopass)
+		return sudoOpen(path, l.activeuser, l.sudopass, modeCreate)
 	}
 
 	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
@@ -139,8 +139,17 @@ func (l Local) Create(path string) (io.WriteCloser, error) {
 // Open opens a file in path
 func (l Local) Open(path string) (io.ReadCloser, error) {
 	if l.Sudo() {
-		return sudoOpen(path, l.activeuser, l.sudopass)
+		return sudoOpen(path, l.activeuser, l.sudopass, modeRead)
 	}
 
 	return os.Open(path)
+}
+
+// Append opens a file in path for appending
+func (l Local) Append(path string) (io.WriteCloser, error) {
+	if l.Sudo() {
+		return sudoOpen(path, l.activeuser, l.sudopass, modeAppend)
+	}
+
+	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
 }

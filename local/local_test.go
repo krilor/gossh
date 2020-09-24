@@ -180,3 +180,58 @@ func TestOpen(t *testing.T) {
 	}
 
 }
+
+func TestAppend(t *testing.T) {
+
+	l, err := New(testsudopass)
+	if err != nil {
+		t.Fatal("could not get local:", err)
+	}
+
+	orignalcontent := "somecontent\nwith\nnewlines"
+
+	tests := []struct {
+		activeuser string
+		path       string
+		content    string
+	}{
+		{l.user, testdir + "/testappend1", "some\ncontent"},
+		{"root", testdir + "/testappend2", "content"},
+	}
+
+	for _, test := range tests {
+		t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
+
+			l.activeuser = test.activeuser
+
+			fc, _ := l.Create(test.path)
+			fc.Write([]byte(orignalcontent))
+			fc.Close()
+
+			f, err := l.Append(test.path)
+			if err != nil {
+				t.Fatal("open errored", err)
+			}
+
+			_, err = f.Write([]byte(test.content))
+			if err != nil {
+				t.Fatal("could not write to file", err)
+			}
+
+			f.Close()
+
+			content, err := ioutil.ReadFile(test.path)
+			if err != nil {
+				t.Error("could not read file", err)
+			}
+
+			expectedcontent := orignalcontent + test.content
+
+			if string(content) != expectedcontent {
+				t.Errorf(`file content wrong - expect: "%s", got : "%s"`, expectedcontent, string(content))
+			}
+
+		})
+	}
+
+}
