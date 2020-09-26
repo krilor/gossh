@@ -3,11 +3,15 @@ package gossh
 import (
 	"fmt"
 	"log"
+	"net"
+	"os"
 	"os/user"
 	"regexp"
 	"strings"
 
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 )
 
 // runner is the interface for running arbritrary shell commands
@@ -182,4 +186,21 @@ var sudopattern *regexp.Regexp = regexp.MustCompile(`\[sudo\] password for [^:]+
 // scrubStd cleans an out/err string. Removes trailing newline and sudo prompt.
 func scrubStd(in string) string {
 	return sudopattern.ReplaceAllString(strings.Trim(in, "\n"), "")
+}
+
+// AgentAuths is a helper function to get SSH keys from an ssh agent.
+// If any errors occur, an empty PublicKeys ssh.AuthMethod will be returned.
+func AgentAuths() ssh.AuthMethod {
+
+	socket := os.Getenv("SSH_AUTH_SOCK")
+	conn, err := net.Dial("unix", socket)
+	if err != nil {
+		return ssh.PublicKeys()
+	}
+	defer conn.Close()
+
+	agentClient := agent.NewClient(conn)
+
+	// TODO how do we close these clients?
+	return ssh.PublicKeysCallback(agentClient.Signers)
 }

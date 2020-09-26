@@ -3,16 +3,15 @@ package rmt
 import (
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"path/filepath"
 
-	"github.com/krilor/gossh/rmt/suftp"
-	"github.com/krilor/gossh/sh"
+	"github.com/krilor/gossh/target/rmt/suftp"
+	"github.com/krilor/gossh/target/sh"
+	"github.com/krilor/gossh/target/sh/sudo"
 	"github.com/pkg/errors"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
-	"golang.org/x/crypto/ssh/agent"
 )
 
 // Package rmt contains functionality for Remote targets
@@ -29,7 +28,7 @@ type Remote struct {
 	sudopass string
 
 	// the user currently operating as
-	activeuser string
+	activeUser string
 
 	// sftp holds all sftp connections. key is username. Pointer?
 	sftp map[string]*sftp.Client
@@ -42,7 +41,7 @@ func New(addr string, user string, sudopass string, hostkeycallback ssh.HostKeyC
 		addr:       addr,
 		connuser:   user,
 		sudopass:   sudopass,
-		activeuser: user,
+		activeUser: user,
 		sftp:       map[string]*sftp.Client{},
 	}
 
@@ -71,93 +70,50 @@ func (r Remote) Close() error {
 	return r.conn.Close()
 }
 
-// sftpClient returns a sftp client for r.activeuser
+// sftpClient returns a sftp client for r.activeUser
 // if client does not exist, it will be created
 func (r Remote) sftpClient() (*sftp.Client, error) {
 	var c *sftp.Client
 	var err error
 	var ok bool
-	c, ok = r.sftp[r.activeuser]
+	c, ok = r.sftp[r.activeUser]
 	if ok {
 		return c, nil
 	}
 	// need to create a new connection
-	if r.Sudo() {
-		c, err = suftp.NewSudoClient(r.conn, r.activeuser, r.sudopass)
+	if r.sudo() {
+		c, err = suftp.NewSudoClient(r.conn, r.activeUser, r.sudopass)
 	} else {
 		c, err = sftp.NewClient(r.conn)
 	}
 	if err != nil {
-		return nil, errors.Wrapf(err, "could not start sftp connection for %s", r.activeuser)
+		return nil, errors.Wrapf(err, "could not start sftp connection for %s", r.activeUser)
 	}
-	r.sftp[r.activeuser] = c
+	r.sftp[r.activeUser] = c
 	return c, nil
 }
 
-// Sudo reports if operations must be done using sudo, i.e. if active user is not the connected user.
-func (r Remote) Sudo() bool {
-	return r.activeuser != r.connuser
+// sudo reports if operations must be done using sudo, i.e. if active user is not the connected user.
+func (r Remote) sudo() bool {
+	return r.activeUser != r.connuser
 }
 
 // As returns a new Remote that will use the same underlying connections, but all operations will be done as user.
 //
 // No tests are done in this method. If user does not exist or does not have sudo rights, that will only be evident when trying to use methods on the returned object.
 func (r Remote) As(user string) Remote {
-	r.activeuser = user
+	r.activeUser = user
 	return r
 }
 
-// Mkdir creates a directory in the given path
-func (r Remote) Mkdir(path string) error {
-	sftp, err := r.sftpClient()
-	if err != nil {
-		return err
-	}
-	return sftp.Mkdir(path)
-}
-
-// Put puts the contents of a Reader on a path on the Remote machine
-//
-// Inspiration:
-// https://github.com/laher/scp-go/blob/master/scp/toRemote.go
-// https://gist.github.com/jedy/3357393
-//
-// SCP notes:
-// https://web.archive.org/web/20170215184048/https://blogs.oracle.com/janp/entry/how_the_scp_protocol_works
-// https://en.wikipedia.org/wiki/Secure_copy#cite_note-Pechanec-2
-func (r *Remote) put(content io.Reader, size int64, path string, mode uint32) error {
-
-	// consider using github.com/pkg/sftp
-
-	session, err := r.conn.NewSession()
-	if err != nil {
-		return errors.Wrap(err, "failed to create scp session")
-	}
-	defer session.Close()
-
-	go func() {
-		w, _ := session.StdinPipe()
-		defer w.Close()
-
-		// header message has the format C<mode> <size> <filename>
-		fmt.Fprintf(w, "C%04o %d %s\n", mode, size, filepath.Base(path))
-
-		io.Copy(w, content)
-
-		// transfer end with \x00
-		fmt.Fprint(w, "\x00")
-	}()
-
-	if b, err := session.CombinedOutput(fmt.Sprintf("/usr/bin/scp -tr %s", path)); err != nil {
-		return errors.Wrapf(err, "unable to copy content: %s", string(b))
-	}
-
-	return nil
-}
-
-// User returns the currently active user
+// User returns the connected user
 func (r Remote) User() string {
-	return r.activeuser
+	return r.connuser
+}
+
+// ActiveUser returns the currently active user
+func (r Remote) ActiveUser() string {
+	return r.activeUser
 }
 
 // String implements fmt.Stringer
@@ -167,17 +123,17 @@ func (r Remote) String() string {
 
 // Run executes cmd on Remote with the currently active user and returns the response.
 // Reader stdin is used to add stdin.
-func (r Remote) Run(cmd string, stdin io.Reader) (sh.Response, error) {
-	if r.Sudo() {
+func (r Remote) Run(cmd string, stdin io.Reader) (sh.Result, error) {
+	if r.sudo() {
 		return r.runsudo(cmd, stdin)
 	}
 	return r.run(cmd, stdin)
 }
 
 // run run cmd on remote
-func (r Remote) run(cmd string, stdin io.Reader) (sh.Response, error) {
+func (r Remote) run(cmd string, stdin io.Reader) (sh.Result, error) {
 	session, err := r.conn.NewSession()
-	resp := sh.Response{}
+	resp := sh.Result{}
 
 	if err != nil {
 		return resp, errors.Wrap(err, "unable to create new session")
@@ -208,18 +164,18 @@ func (r Remote) run(cmd string, stdin io.Reader) (sh.Response, error) {
 	return resp, nil
 }
 
-// runsudo runs cmd on Remote as sudo / activeuser
-func (r Remote) runsudo(cmd string, stdin io.Reader) (sh.Response, error) {
+// runsudo runs cmd on Remote as sudo / activeUser
+func (r Remote) runsudo(cmd string, stdin io.Reader) (sh.Result, error) {
 
 	session, err := r.conn.NewSession()
-	resp := sh.Response{}
+	resp := sh.Result{}
 
 	if err != nil {
 		return resp, errors.Wrap(err, "unable to create new session")
 	}
 	defer session.Close()
 
-	sudo := sh.NewSudo(cmd, r.activeuser, r.sudopass, stdin)
+	sudo := sudo.New(cmd, r.activeUser, r.sudopass, stdin)
 
 	session.Stdout = &resp.Stdout
 	session.Stderr = sudo
@@ -280,19 +236,40 @@ func (r Remote) Append(path string) (io.WriteCloser, error) {
 	return sftp.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND)
 }
 
-// AgentAuths is a helper function to get SSH keys from an ssh agent.
-// If any errors occur, an empty PublicKeys ssh.AuthMethod will be returned.
-func AgentAuths() ssh.AuthMethod {
+// Put puts the contents of a Reader on a path on the Remote machine, using scp
+// TODO - consider (re)moving this
+//
+// Inspiration:
+// https://github.com/laher/scp-go/blob/master/scp/toRemote.go
+// https://gist.github.com/jedy/3357393
+//
+// SCP notes:
+// https://web.archive.org/web/20170215184048/https://blogs.oracle.com/janp/entry/how_the_scp_protocol_works
+// https://en.wikipedia.org/wiki/Secure_copy#cite_note-Pechanec-2
+func (r *Remote) put(content io.Reader, size int64, path string, mode uint32) error {
 
-	socket := os.Getenv("SSH_AUTH_SOCK")
-	conn, err := net.Dial("unix", socket)
+	session, err := r.conn.NewSession()
 	if err != nil {
-		return ssh.PublicKeys()
+		return errors.Wrap(err, "failed to create scp session")
 	}
-	defer conn.Close()
+	defer session.Close()
 
-	agentClient := agent.NewClient(conn)
+	go func() {
+		w, _ := session.StdinPipe()
+		defer w.Close()
 
-	// TODO how do we close these clients?
-	return ssh.PublicKeysCallback(agentClient.Signers)
+		// header message has the format C<mode> <size> <filename>
+		fmt.Fprintf(w, "C%04o %d %s\n", mode, size, filepath.Base(path))
+
+		io.Copy(w, content)
+
+		// transfer end with \x00
+		fmt.Fprint(w, "\x00")
+	}()
+
+	if b, err := session.CombinedOutput(fmt.Sprintf("/usr/bin/scp -tr %s", path)); err != nil {
+		return errors.Wrapf(err, "unable to copy content: %s", string(b))
+	}
+
+	return nil
 }

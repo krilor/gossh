@@ -1,9 +1,10 @@
-package sh
+package sudo
 
 import (
 	"bytes"
 	"fmt"
 	"io"
+	"strings"
 )
 
 const (
@@ -12,8 +13,8 @@ const (
 	sudoFailed    string = "OHMYTHISISBAAD"
 )
 
-// NewSudo returns a new Sudo
-func NewSudo(cmd, user, pwd string, stdin io.Reader) *Sudo {
+// New returns a new Sudo
+func New(cmd, user, pwd string, stdin io.Reader) *Sudo {
 	return &Sudo{
 		cmd:    cmd,
 		user:   user,
@@ -88,4 +89,13 @@ func (s *Sudo) Write(p []byte) (int, error) {
 	}
 
 	return len(p), nil
+}
+
+// Escape escapes a cmd so that it can be used inside a single-quoted argument.
+// The intended purpose e.g. when strings are used as input to sh -c '%s'
+// The method assumes that the outer, surrounding quote is a singlequote.
+// The surrounding quote must not be part of cmd.
+func Escape(cmd string) string {
+	// nice ref on stack: https://stackoverflow.com/questions/1250079/how-to-escape-single-quotes-within-single-quoted-strings
+	return strings.ReplaceAll(cmd, `'`, `'\''`)
 }

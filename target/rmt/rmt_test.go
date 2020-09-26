@@ -50,47 +50,6 @@ func TestMain(m *testing.M) {
 
 }
 
-func TestMkdir(t *testing.T) {
-
-	tests := []struct {
-		activeuser string
-		path       string
-		shouldfail bool
-	}{
-		{"root", "/root/testmkdir1", false},
-		{"hobgob", "/root/testmkdir2", true},
-		{"gossh", "/home/gossh/testmkdir3", false},
-	}
-
-	for _, c := range containers {
-		r, err := New(c.Addr(), "gossh", "gosshpwd", ssh.InsecureIgnoreHostKey(), ssh.Password("gosshpwd"))
-		if err != nil {
-			t.Fatal("could not connect to container:", err)
-		}
-		defer r.Close()
-		for _, test := range tests {
-			t.Run(fmt.Sprintf("%s:%s:%s:%v", c.Image(), test.activeuser, test.path, test.shouldfail), func(t *testing.T) {
-
-				r.activeuser = test.activeuser
-				err = r.Mkdir(test.path)
-				if err != nil && !test.shouldfail {
-					t.Error("test file creation errored", err)
-				} else if err == nil && test.shouldfail {
-					t.Error("test didn't erorr as expected")
-				}
-
-				if !test.shouldfail {
-					o, _, _, _ := c.Exec("stat --format='%U' " + test.path)
-					if o != test.activeuser {
-						t.Errorf("wrong ownership. got %s", o)
-					}
-				}
-			})
-		}
-	}
-
-}
-
 func TestRun(t *testing.T) {
 
 	type resp struct {
@@ -190,17 +149,17 @@ func TestRun(t *testing.T) {
 			t.Run(fmt.Sprintf("%s %s %s %v %s", c.Image(), test.cmd, test.stdin, test.sudo, test.user), func(t *testing.T) {
 
 				if test.user != "" {
-					r.activeuser = test.user
+					r.activeUser = test.user
 				}
 				got, err := r.Run(test.cmd, strings.NewReader(test.stdin))
 				if err != nil {
 					t.Errorf("errored: %v", err)
 				}
 
-				if got.Out() != test.expect.Stdout {
+				if got.TrimOut() != test.expect.Stdout {
 					t.Errorf("stdout: got \"%s\" - expect \"%s\"", got.Stdout.String(), test.expect.Stdout)
 				}
-				if got.Err() != test.expect.Stderr {
+				if got.TrimErr() != test.expect.Stderr {
 					t.Errorf("stderr: got \"%s\" - expect \"%s\"", got.Stderr.String(), test.expect.Stderr)
 				}
 				if got.ExitStatus != test.expect.ExitStatus {
@@ -248,16 +207,16 @@ func TestPut(t *testing.T) {
 func TestAs(t *testing.T) {
 	original := Remote{
 		connuser:   "jon",
-		activeuser: "jon",
+		activeUser: "jon",
 	}
 	super := original.As("root")
 
-	if super.activeuser != "root" {
-		t.Errorf("super.activeuser error: expect 'root', got '%s'", super.activeuser)
+	if super.activeUser != "root" {
+		t.Errorf("super.activeUser error: expect 'root', got '%s'", super.activeUser)
 	}
 
-	if original.activeuser != "jon" {
-		t.Errorf("original.activeuser error: expect 'jon', got '%s'", original.activeuser)
+	if original.activeUser != "jon" {
+		t.Errorf("original.activeUser error: expect 'jon', got '%s'", original.activeUser)
 	}
 }
 
@@ -280,7 +239,7 @@ func TestCreate(t *testing.T) {
 		for _, test := range tests {
 			t.Run(test.path+c.Image(), func(t *testing.T) {
 
-				r.activeuser = test.user
+				r.activeUser = test.user
 
 				f, err := r.Create(test.path)
 				if err != nil {
@@ -325,7 +284,7 @@ func TestOpen(t *testing.T) {
 		for _, test := range tests {
 			t.Run(test.path+c.Image(), func(t *testing.T) {
 
-				r.activeuser = test.user
+				r.activeUser = test.user
 
 				c.Exec(fmt.Sprintf("echo -n \"%s\" > %s && chown %s:%s %s %% && chmod 600 %s", test.content, test.path, test.user, test.user, test.path, test.path))
 
@@ -370,7 +329,7 @@ func TestAppend(t *testing.T) {
 		for _, test := range tests {
 			t.Run(test.path+c.Image(), func(t *testing.T) {
 
-				r.activeuser = test.user
+				r.activeUser = test.user
 
 				c.Exec(fmt.Sprintf("echo -n \"%s\" > %s && chown %s:%s %s %% && chmod 600 %s", originalcontent, test.path, test.user, test.user, test.path, test.path))
 

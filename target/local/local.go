@@ -7,7 +7,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/krilor/gossh/sh"
+	"github.com/krilor/gossh/target/sh"
+	"github.com/krilor/gossh/target/sh/sudo"
 	"github.com/pkg/errors"
 )
 
@@ -16,7 +17,7 @@ import (
 // Local implements a localhost Target
 type Local struct {
 	user       string
-	activeuser string
+	activeUser string
 	sudopass   string
 }
 
@@ -32,7 +33,7 @@ func New(sudopass string) (Local, error) {
 		return l, errors.Wrap(err, "could not identify user")
 	}
 	l.user = strings.Trim(string(buf), " \n")
-	l.activeuser = l.user
+	l.activeUser = l.user
 	return l, nil
 }
 
@@ -43,30 +44,45 @@ func (l Local) Close() error {
 
 // As returns an instance of Local where user is the active user
 func (l Local) As(user string) Local {
-	l.activeuser = user
+	l.activeUser = user
 	return l
 }
 
-// Sudo reports if sudo is required
-func (l Local) Sudo() bool {
-	return l.user != l.activeuser
+// User returns the connected user
+func (l Local) User() string {
+	return l.user
+}
+
+// ActiveUser returns the currently active user
+func (l Local) ActiveUser() string {
+	return l.activeUser
+}
+
+// sudo reports if sudo is required
+func (l Local) sudo() bool {
+	return l.user != l.activeUser
+}
+
+// String implements fmt.Stringer
+func (l Local) String() string {
+	return fmt.Sprintf("%s@local", l.activeUser)
 }
 
 // Run runs cmd
-func (l Local) Run(cmd string, stdin io.Reader) (sh.Response, error) {
-	if l.Sudo() {
+func (l Local) Run(cmd string, stdin io.Reader) (sh.Result, error) {
+	if l.sudo() {
 		return l.runsudo(cmd, stdin)
 	}
 
 	return l.run(cmd, stdin)
 }
 
-// runsudo runs cmd as activeuser using sudo
-func (l Local) runsudo(cmd string, stdin io.Reader) (sh.Response, error) {
+// runsudo runs cmd as activeUser using sudo
+func (l Local) runsudo(cmd string, stdin io.Reader) (sh.Result, error) {
 
-	resp := sh.Response{}
+	resp := sh.Result{}
 
-	sudo := sh.NewSudo(cmd, l.activeuser, l.sudopass, stdin)
+	sudo := sudo.New(cmd, l.activeUser, l.sudopass, stdin)
 	command := exec.Command("sudo", sudo.Args()...)
 
 	var err error
@@ -89,10 +105,10 @@ func (l Local) runsudo(cmd string, stdin io.Reader) (sh.Response, error) {
 	return resp, nil
 }
 
-// runsudo runs cmd as activeuser using sudo
-func (l Local) run(cmd string, stdin io.Reader) (sh.Response, error) {
+// runsudo runs cmd as activeUser using sudo
+func (l Local) run(cmd string, stdin io.Reader) (sh.Result, error) {
 
-	resp := sh.Response{}
+	resp := sh.Result{}
 
 	command := exec.Command("bash", "-c", cmd)
 
@@ -115,22 +131,10 @@ func (l Local) run(cmd string, stdin io.Reader) (sh.Response, error) {
 	return resp, nil
 }
 
-// Mkdir creates the specified directory
-// Permission bits are set to 0666 before umask.
-func (l Local) Mkdir(path string) error {
-	if l.Sudo() {
-		cmd := fmt.Sprintf("mkdir %s", path)
-		_, err := l.Run(cmd, nil)
-		return errors.Wrap(err, "mkdir failed")
-	}
-
-	return os.Mkdir(path, 0666)
-}
-
 // Create creates the file in path
 func (l Local) Create(path string) (io.WriteCloser, error) {
-	if l.Sudo() {
-		return sudoOpen(path, l.activeuser, l.sudopass, modeCreate)
+	if l.sudo() {
+		return sudoOpen(path, l.activeUser, l.sudopass, modeCreate)
 	}
 
 	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
@@ -138,8 +142,8 @@ func (l Local) Create(path string) (io.WriteCloser, error) {
 
 // Open opens a file in path
 func (l Local) Open(path string) (io.ReadCloser, error) {
-	if l.Sudo() {
-		return sudoOpen(path, l.activeuser, l.sudopass, modeRead)
+	if l.sudo() {
+		return sudoOpen(path, l.activeUser, l.sudopass, modeRead)
 	}
 
 	return os.Open(path)
@@ -147,8 +151,8 @@ func (l Local) Open(path string) (io.ReadCloser, error) {
 
 // Append opens a file in path for appending
 func (l Local) Append(path string) (io.WriteCloser, error) {
-	if l.Sudo() {
-		return sudoOpen(path, l.activeuser, l.sudopass, modeAppend)
+	if l.sudo() {
+		return sudoOpen(path, l.activeUser, l.sudopass, modeAppend)
 	}
 
 	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)

@@ -22,6 +22,8 @@ func TestMain(m *testing.M) {
 		log.Fatal("missing GOSSH_SUDOPASS env variable")
 	}
 
+	exec.Command("sudo", "-k").Run()
+
 	testdir = fmt.Sprintf("%s/gossh-%s", os.TempDir(), shortuuid.New())
 	err := os.Mkdir(testdir, 0777)
 	if err != nil {
@@ -38,47 +40,6 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestMkdir(t *testing.T) {
-
-	l, err := New(testsudopass)
-
-	tests := []struct {
-		activeuser string
-		path       string
-	}{
-		{l.user, testdir + "/gossh_testmkdir2-" + shortuuid.New()},
-		{"root", testdir + "/gossh_testmkdir1-" + shortuuid.New()},
-	}
-
-	if err != nil {
-		t.Fatal("could not get local:", err)
-	}
-
-	for _, test := range tests {
-		t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
-
-			l.activeuser = test.activeuser
-			err = l.Mkdir(test.path)
-			if err != nil {
-				t.Error("test file creation errored", err)
-			}
-
-			stat := exec.Command("stat", "--format=%U", test.path)
-			o, err := stat.Output()
-			if err != nil {
-				t.Error("stat failed", err)
-			}
-
-			owner := strings.Trim(string(o), " \n")
-			if owner != test.activeuser {
-				t.Errorf("wrong ownership. got '%s'", o)
-			}
-
-		})
-	}
-
-}
-
 func TestCreate(t *testing.T) {
 
 	l, err := New(testsudopass)
@@ -87,7 +48,7 @@ func TestCreate(t *testing.T) {
 	}
 
 	tests := []struct {
-		activeuser string
+		activeUser string
 		path       string
 		content    string
 	}{
@@ -98,7 +59,8 @@ func TestCreate(t *testing.T) {
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
 
-			l.activeuser = test.activeuser
+			l.activeUser = test.activeUser
+
 			f, err := l.Create(test.path)
 			if err != nil {
 				t.Fatal("create errored", err)
@@ -109,16 +71,19 @@ func TestCreate(t *testing.T) {
 				t.Fatal("could not write to file", err)
 			}
 
-			f.Close()
+			err = f.Close()
+			if err != nil {
+				t.Error("close failed", err)
+			}
 
 			stat := exec.Command("stat", "--format=%U", test.path)
-			o, err := stat.Output()
+			o, err := stat.CombinedOutput()
 			if err != nil {
-				t.Error("stat failed", err)
+				t.Error("stat failed", err, string(o))
 			}
 
 			owner := strings.Trim(string(o), " \n")
-			if owner != test.activeuser {
+			if owner != test.activeUser {
 				t.Errorf("wrong ownership. got '%s'", o)
 			}
 
@@ -144,7 +109,7 @@ func TestOpen(t *testing.T) {
 	}
 
 	tests := []struct {
-		activeuser string
+		activeUser string
 		path       string
 		content    string
 	}{
@@ -155,7 +120,7 @@ func TestOpen(t *testing.T) {
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
 
-			l.activeuser = test.activeuser
+			l.activeUser = test.activeUser
 
 			fc, _ := l.Create(test.path)
 			fc.Write([]byte(test.content))
@@ -191,7 +156,7 @@ func TestAppend(t *testing.T) {
 	orignalcontent := "somecontent\nwith\nnewlines"
 
 	tests := []struct {
-		activeuser string
+		activeUser string
 		path       string
 		content    string
 	}{
@@ -202,7 +167,7 @@ func TestAppend(t *testing.T) {
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
 
-			l.activeuser = test.activeuser
+			l.activeUser = test.activeUser
 
 			fc, _ := l.Create(test.path)
 			fc.Write([]byte(orignalcontent))

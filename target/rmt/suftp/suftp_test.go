@@ -1,13 +1,52 @@
 package suftp
 
 import (
+	"flag"
 	"fmt"
 	"log"
+	"os"
 	"strings"
 	"testing"
 
 	"github.com/krilor/gossh/testing/docker"
 )
+
+var containers []*docker.Container
+
+func TestMain(m *testing.M) {
+
+	// need to parse flags for testing.Short()
+	flag.Parse()
+
+	// setup
+	var imgs []docker.Image
+	if testing.Short() {
+		imgs = docker.Bench
+	} else {
+		imgs = docker.FullBench
+	}
+
+	for _, img := range imgs {
+		log.Println("creating container: ", img.Name())
+		c, err := docker.New(img)
+		if err != nil {
+			log.Fatalf("unable to create container %s", img.Name())
+		}
+		containers = append(containers, c)
+	}
+
+	// run tests
+	code := m.Run()
+
+	// teardown
+	for _, c := range containers {
+		log.Println("killing container:", c.Image())
+		c.Kill()
+	}
+
+	os.Exit(code)
+
+}
 
 func TestSudoSftp(t *testing.T) {
 
@@ -29,16 +68,9 @@ func TestSudoSftp(t *testing.T) {
 		{"stinky", "gossh", "stinkypwd", "/home/gossh/stinkyfile", "sudo failed or no sudo rights"}, // stinky does not have sudo rights
 	}
 
-	for _, img := range docker.FullBench {
-
-		c, err := docker.New(img)
-		if err != nil {
-			log.Fatalf("could not get throwaway container: %v", err)
-		}
-		defer c.Kill()
-
+	for _, c := range containers {
 		for _, test := range tests {
-			t.Run(fmt.Sprintf("%s - %v", img.Name(), test), func(t *testing.T) {
+			t.Run(fmt.Sprintf("%s - %v", c.Image(), test), func(t *testing.T) {
 
 				conn, err := c.NewSSHClient(test.user)
 				if err != nil {
