@@ -1,6 +1,7 @@
 package rmt
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"os"
@@ -206,37 +207,62 @@ func (r Remote) runsudo(cmd string, stdin io.Reader) (sh.Result, error) {
 	return resp, nil
 }
 
-// Create creates file in path with os.O_WRONLY|os.O_CREATE|os.O_TRUNC
-func (r Remote) Create(path string) (io.WriteCloser, error) {
+// Put implements target.Put
+func (r Remote) Put(filename string, data []byte, perm os.FileMode) error {
+	sftp, err := r.sftpClient()
+	if err != nil {
+		return errors.Wrap(err, "could not get sftp client")
+	}
+
+	f, err := sftp.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
+	if err != nil {
+		return errors.Wrap(err, "unable to open file")
+	}
+	defer f.Close()
+
+	n, err := f.Write(data)
+
+	if err != nil {
+		return errors.Wrap(err, "write error")
+	}
+
+	if n != len(data) {
+		return fmt.Errorf("wrote %d of %d bytes to file", n, len(data))
+	}
+
+	err = f.Chmod(perm)
+
+	if err != nil {
+		return errors.Wrap(err, "chmod error")
+	}
+
+	return nil
+}
+
+// Get retrieves the contents of the named
+func (r Remote) Get(filename string) ([]byte, error) {
 	sftp, err := r.sftpClient()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get sftp client")
 	}
 
-	return sftp.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC)
-}
+	b := &bytes.Buffer{}
 
-// Open opens the named file for reading.
-func (r Remote) Open(path string) (io.ReadCloser, error) {
-	sftp, err := r.sftpClient()
+	f, err := sftp.Open(filename)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not get sftp client")
+		return []byte{}, errors.Wrap(err, "unable to open file")
+	}
+	defer f.Close()
+
+	_, err = f.WriteTo(b)
+	if err != nil {
+		return b.Bytes(), errors.Wrap(err, "reading failed")
 	}
 
-	return sftp.Open(path)
+	return b.Bytes(), nil
 }
 
-// Append creates file in path with os.O_WRONLY|os.O_CREATE|os.O_TRUNC
-func (r Remote) Append(path string) (io.WriteCloser, error) {
-	sftp, err := r.sftpClient()
-	if err != nil {
-		return nil, errors.Wrap(err, "could not get sftp client")
-	}
-
-	return sftp.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND)
-}
-
-// Put puts the contents of a Reader on a path on the Remote machine, using scp
+// scput puts the contents of a Reader on a path on the Remote machine, using scp
 // TODO - consider (re)moving this
 //
 // Inspiration:
@@ -246,7 +272,7 @@ func (r Remote) Append(path string) (io.WriteCloser, error) {
 // SCP notes:
 // https://web.archive.org/web/20170215184048/https://blogs.oracle.com/janp/entry/how_the_scp_protocol_works
 // https://en.wikipedia.org/wiki/Secure_copy#cite_note-Pechanec-2
-func (r *Remote) put(content io.Reader, size int64, path string, mode uint32) error {
+func (r *Remote) scput(content io.Reader, size int64, path string, mode uint32) error {
 
 	session, err := r.conn.NewSession()
 	if err != nil {

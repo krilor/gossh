@@ -1,8 +1,10 @@
 package local
 
 import (
+	"bytes"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"strings"
@@ -131,29 +133,60 @@ func (l Local) run(cmd string, stdin io.Reader) (sh.Result, error) {
 	return resp, nil
 }
 
-// Create creates the file in path
-func (l Local) Create(path string) (io.WriteCloser, error) {
+// Put implements target.Put
+func (l Local) Put(filename string, data []byte, perm os.FileMode) error {
 	if l.sudo() {
-		return sudoOpen(path, l.activeUser, l.sudopass, modeCreate)
+		cmd := fmt.Sprintf("tee > %s", filename)
+		stdin := bytes.NewBuffer(data)
+		res, err := l.runsudo(cmd, stdin)
+
+		if err != nil {
+			return errors.Wrap(err, "tee errored")
+		}
+		if res.ExitStatus != 0 {
+			return fmt.Errorf("tee failed with status %d", res.ExitStatus)
+		}
+
+		cmd = fmt.Sprintf("chmod %04o %s", perm, filename)
+		res, err = l.runsudo(cmd, stdin)
+
+		if err != nil {
+			return errors.Wrap(err, "chmod errored")
+		}
+		if res.ExitStatus != 0 {
+			return fmt.Errorf("chmod failed with status %d", res.ExitStatus)
+		}
+
+		return nil
+
 	}
 
-	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0666)
+	err := ioutil.WriteFile(filename, data, perm)
+	if err != nil {
+		return errors.Wrap(err, "writefile failed")
+	}
+
+	err = os.Chmod(filename, perm)
+	if err != nil {
+		return errors.Wrap(err, "chmod failed")
+	}
+
+	return nil
 }
 
-// Open opens a file in path
-func (l Local) Open(path string) (io.ReadCloser, error) {
+// Get implements target.Get
+func (l Local) Get(filename string) ([]byte, error) {
 	if l.sudo() {
-		return sudoOpen(path, l.activeUser, l.sudopass, modeRead)
+		cmd := fmt.Sprintf("cat %s", filename)
+		res, err := l.runsudo(cmd, nil)
+		if err != nil {
+			return []byte{}, errors.Wrap(err, "cat failed")
+		}
+		if res.ExitStatus != 0 {
+			return []byte{}, errors.Wrapf(err, "cat failed with exitstatus %d", res.ExitStatus)
+		}
+		return res.Stdout.Bytes(), nil
 	}
 
-	return os.Open(path)
-}
-
-// Append opens a file in path for appending
-func (l Local) Append(path string) (io.WriteCloser, error) {
-	if l.sudo() {
-		return sudoOpen(path, l.activeUser, l.sudopass, modeAppend)
-	}
-
-	return os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+	return ioutil.ReadFile(filename)
 }

@@ -48,7 +48,7 @@ func (i Image) Name() string {
 
 var debianInstructions string = `
 RUN apt update
-RUN apt -y install openssh-server sudo
+RUN apt -y install openssh-server sudo rsyslog
 RUN mkdir -p /var/run/sshd
 `
 
@@ -63,7 +63,7 @@ var rhelInstructions string = `
 RUN yum -y install sudo && \
 	sed -i.old '0,/# %wheel/{s/# %wheel.*/%wheel ALL=(ALL) ALL/}' /etc/sudoers
 
-RUN yum -y install openssh openssh-server openssh-clients && \
+RUN yum -y install openssh openssh-server openssh-clients rsyslog && \
 	yum -y clean all
 
 # ssh-keygen -A is not available on rhel6 based images
@@ -79,6 +79,10 @@ RUN ssh-keygen -q -N "" -t dsa -f /etc/ssh/ssh_host_dsa_key && \
 // RUN echo "Set disable_coredump false" >> /etc/sudo.conf
 
 var commonInstructions string = `
+
+# turn on sftp logging
+RUN sed -i.old -e "s/^Subsystem\ssftp.*/& -l INFO/g" /etc/ssh/sshd_config
+
 RUN echo "Defaults lecture = never" >> /etc/sudoers.d/0_privacy
 
 RUN echo 'root:rootpwd' | chpasswd

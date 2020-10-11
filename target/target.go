@@ -3,6 +3,7 @@ package target
 import (
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/krilor/gossh/target/sh"
 )
@@ -30,13 +31,12 @@ type Target interface {
 	// Targets should handle that stdin is nil, i.e. no stdin.
 	Run(cmd string, stdin io.Reader) (sh.Result, error)
 
-	// Create creates the named file mode 0666 (before umask), truncating it if it already exists.
-	// The file is opened as write only. ( os.O_WRONLY|os.O_CREATE|os.O_TRUNC )
-	Create(path string) (io.WriteCloser, error)
+	// Put creates the named file in path with perm (before umask), truncating it if it already exists.
+	// Data is written to the file. Modelled after ioutil.Writefile
+	Put(filename string, data []byte, perm os.FileMode) error
 
-	// Open opens the named file for reading.
-	Open(path string) (io.ReadCloser, error)
-
-	// Append returns a writer that appends to path.
-	Append(path string) (io.WriteCloser, error)
+	// Get reads the file named by path.
+	// A successful call returns err == nil, not err == EOF. Because ReadFile reads the whole file, it does not treat an EOF from Read as an error to be reported.
+	// Modelled after ioutil.Readfile
+	Get(filename string) ([]byte, error)
 }

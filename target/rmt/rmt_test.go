@@ -3,7 +3,6 @@ package rmt
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"strings"
@@ -32,7 +31,8 @@ func TestMain(m *testing.M) {
 		log.Println("creating container: ", img.Name())
 		c, err := docker.New(img)
 		if err != nil {
-			log.Fatalf("unable to create container %s", img.Name())
+			log.Fatal("unable to create container", img.Name(), err.Error())
+
 		}
 		containers = append(containers, c)
 	}
@@ -171,7 +171,7 @@ func TestRun(t *testing.T) {
 	}
 }
 
-func TestPut(t *testing.T) {
+func TestScput(t *testing.T) {
 	var tests = []string{"lionking"}
 
 	for _, c := range containers {
@@ -184,7 +184,7 @@ func TestPut(t *testing.T) {
 
 		for _, test := range tests {
 			t.Run(test+c.Image(), func(t *testing.T) {
-				err := r.put(strings.NewReader(test), int64(len(test)), "/tmp/"+test, 644)
+				err := r.scput(strings.NewReader(test), int64(len(test)), "/tmp/"+test, 644)
 
 				if err != nil {
 					t.Error("scp put failed", err)
@@ -220,7 +220,7 @@ func TestAs(t *testing.T) {
 	}
 }
 
-func TestCreate(t *testing.T) {
+func TestPut(t *testing.T) {
 	var tests = []struct {
 		path    string
 		user    string
@@ -241,15 +241,11 @@ func TestCreate(t *testing.T) {
 
 				r.activeUser = test.user
 
-				f, err := r.Create(test.path)
+				err := r.Put(test.path, []byte(test.content), 0644)
 				if err != nil {
 					t.Fatal("could not create file", err)
 				}
-				defer f.Close()
-				_, err = f.Write([]byte(test.content))
-				if err != nil {
-					t.Fatal("could not write to file", err)
-				}
+
 				out, _, _, _ := c.Exec(fmt.Sprintf("cat %s", test.path))
 				if out != test.content {
 					t.Errorf(`wrong content: expect "%s", got "%s"`, test.content, out)
@@ -265,7 +261,7 @@ func TestCreate(t *testing.T) {
 	}
 }
 
-func TestOpen(t *testing.T) {
+func TestGet(t *testing.T) {
 	var tests = []struct {
 		path    string
 		user    string
@@ -288,67 +284,14 @@ func TestOpen(t *testing.T) {
 
 				c.Exec(fmt.Sprintf("echo -n \"%s\" > %s && chown %s:%s %s %% && chmod 600 %s", test.content, test.path, test.user, test.user, test.path, test.path))
 
-				f, err := r.Open(test.path)
+				b, err := r.Get(test.path)
 				if err != nil {
 					t.Fatal("could not open file", err)
-				}
-				defer f.Close()
-
-				b, err := ioutil.ReadAll(f)
-				if err != nil {
-					t.Fatal("could read from file", err)
 				}
 
 				out := string(b)
 				if out != test.content {
 					t.Errorf(`wrong content: expect "%s", got "%s"`, test.content, out)
-				}
-
-			})
-		}
-	}
-}
-
-func TestAppend(t *testing.T) {
-	originalcontent := "some orgig content\nwith\nnewlines"
-	var tests = []struct {
-		path    string
-		user    string
-		content string
-	}{
-		{"/home/gossh/testopen", "gossh", "filecontent"},
-		{"/home/stinky/testopen", "stinky", "filecontentstinky"},
-	}
-
-	for _, c := range containers {
-		r, err := New(fmt.Sprintf("localhost:%d", c.Port()), "gossh", "gosshpwd", ssh.InsecureIgnoreHostKey(), ssh.Password("gosshpwd"))
-
-		if err != nil {
-			log.Fatal("could not connect to throwaway container:", err)
-		}
-		for _, test := range tests {
-			t.Run(test.path+c.Image(), func(t *testing.T) {
-
-				r.activeUser = test.user
-
-				c.Exec(fmt.Sprintf("echo -n \"%s\" > %s && chown %s:%s %s %% && chmod 600 %s", originalcontent, test.path, test.user, test.user, test.path, test.path))
-
-				f, err := r.Append(test.path)
-				if err != nil {
-					t.Fatal("could not open file", err)
-				}
-				defer f.Close()
-
-				_, err = f.Write([]byte(test.content))
-				if err != nil {
-					t.Fatal("could not write to file", err)
-				}
-
-				expectedcontent := originalcontent + test.content
-
-				out, _, _, _ := c.Exec(fmt.Sprintf("cat %s", test.path))
-				if out != expectedcontent {
-					t.Errorf(`wrong content: expect "%s", got "%s"`, expectedcontent, out)
 				}
 
 			})

@@ -40,7 +40,7 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-func TestCreate(t *testing.T) {
+func TestPut(t *testing.T) {
 
 	l, err := New(testsudopass)
 	if err != nil {
@@ -61,19 +61,9 @@ func TestCreate(t *testing.T) {
 
 			l.activeUser = test.activeUser
 
-			f, err := l.Create(test.path)
+			err := l.Put(test.path, []byte(test.content), 0644)
 			if err != nil {
-				t.Fatal("create errored", err)
-			}
-
-			_, err = f.Write([]byte(test.content))
-			if err != nil {
-				t.Fatal("could not write to file", err)
-			}
-
-			err = f.Close()
-			if err != nil {
-				t.Error("close failed", err)
+				t.Fatal("put errored", err)
 			}
 
 			stat := exec.Command("stat", "--format=%U", test.path)
@@ -101,7 +91,7 @@ func TestCreate(t *testing.T) {
 
 }
 
-func TestOpen(t *testing.T) {
+func TestGet(t *testing.T) {
 
 	l, err := New(testsudopass)
 	if err != nil {
@@ -122,78 +112,15 @@ func TestOpen(t *testing.T) {
 
 			l.activeUser = test.activeUser
 
-			fc, _ := l.Create(test.path)
-			fc.Write([]byte(test.content))
-			fc.Close()
+			l.Put(test.path, []byte(test.content), 0644)
 
-			f, err := l.Open(test.path)
+			content, err := l.Get(test.path)
 			if err != nil {
 				t.Fatal("open errored", err)
-			}
-			defer f.Close()
-
-			content, err := ioutil.ReadAll(f)
-			if err != nil {
-				t.Fatal("could not read from file", err)
 			}
 
 			if string(content) != test.content {
 				t.Errorf(`file content wrong - expect: "%s", got : "%s"`, test.content, string(content))
-			}
-
-		})
-	}
-
-}
-
-func TestAppend(t *testing.T) {
-
-	l, err := New(testsudopass)
-	if err != nil {
-		t.Fatal("could not get local:", err)
-	}
-
-	orignalcontent := "somecontent\nwith\nnewlines"
-
-	tests := []struct {
-		activeUser string
-		path       string
-		content    string
-	}{
-		{l.user, testdir + "/testappend1", "some\ncontent"},
-		{"root", testdir + "/testappend2", "content"},
-	}
-
-	for _, test := range tests {
-		t.Run(fmt.Sprintf("%v", test), func(t *testing.T) {
-
-			l.activeUser = test.activeUser
-
-			fc, _ := l.Create(test.path)
-			fc.Write([]byte(orignalcontent))
-			fc.Close()
-
-			f, err := l.Append(test.path)
-			if err != nil {
-				t.Fatal("open errored", err)
-			}
-
-			_, err = f.Write([]byte(test.content))
-			if err != nil {
-				t.Fatal("could not write to file", err)
-			}
-
-			f.Close()
-
-			content, err := ioutil.ReadFile(test.path)
-			if err != nil {
-				t.Error("could not read file", err)
-			}
-
-			expectedcontent := orignalcontent + test.content
-
-			if string(content) != expectedcontent {
-				t.Errorf(`file content wrong - expect: "%s", got : "%s"`, expectedcontent, string(content))
 			}
 
 		})
