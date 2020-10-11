@@ -209,14 +209,14 @@ func TestAs(t *testing.T) {
 		connuser:   "jon",
 		activeUser: "jon",
 	}
-	super := original.As("root")
+	original.As("root")
 
-	if super.activeUser != "root" {
-		t.Errorf("super.activeUser error: expect 'root', got '%s'", super.activeUser)
+	if original.activeUser != "root" {
+		t.Errorf("super.activeUser error: expect 'root', got '%s'", original.activeUser)
 	}
 
-	if original.activeUser != "jon" {
-		t.Errorf("original.activeUser error: expect 'jon', got '%s'", original.activeUser)
+	if original.connuser != "jon" {
+		t.Errorf("original.connuser error: expect 'jon', got '%s'", original.activeUser)
 	}
 }
 

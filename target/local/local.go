@@ -40,38 +40,37 @@ func New(sudopass string) (Local, error) {
 }
 
 // Close does nothing. It is just there to satisfy the gossh.Target interface.
-func (l Local) Close() error {
+func (l *Local) Close() error {
 	return nil
 }
 
-// As returns an instance of Local where user is the active user
-func (l Local) As(user string) Local {
+// As sets the active user for local
+func (l *Local) As(user string) {
 	l.activeUser = user
-	return l
 }
 
 // User returns the connected user
-func (l Local) User() string {
+func (l *Local) User() string {
 	return l.user
 }
 
 // ActiveUser returns the currently active user
-func (l Local) ActiveUser() string {
+func (l *Local) ActiveUser() string {
 	return l.activeUser
 }
 
 // sudo reports if sudo is required
-func (l Local) sudo() bool {
+func (l *Local) sudo() bool {
 	return l.user != l.activeUser
 }
 
 // String implements fmt.Stringer
-func (l Local) String() string {
+func (l *Local) String() string {
 	return fmt.Sprintf("%s@local", l.activeUser)
 }
 
 // Run runs cmd
-func (l Local) Run(cmd string, stdin io.Reader) (sh.Result, error) {
+func (l *Local) Run(cmd string, stdin io.Reader) (sh.Result, error) {
 	if l.sudo() {
 		return l.runsudo(cmd, stdin)
 	}
@@ -80,7 +79,7 @@ func (l Local) Run(cmd string, stdin io.Reader) (sh.Result, error) {
 }
 
 // runsudo runs cmd as activeUser using sudo
-func (l Local) runsudo(cmd string, stdin io.Reader) (sh.Result, error) {
+func (l *Local) runsudo(cmd string, stdin io.Reader) (sh.Result, error) {
 
 	resp := sh.Result{}
 
@@ -108,7 +107,7 @@ func (l Local) runsudo(cmd string, stdin io.Reader) (sh.Result, error) {
 }
 
 // runsudo runs cmd as activeUser using sudo
-func (l Local) run(cmd string, stdin io.Reader) (sh.Result, error) {
+func (l *Local) run(cmd string, stdin io.Reader) (sh.Result, error) {
 
 	resp := sh.Result{}
 
@@ -134,7 +133,7 @@ func (l Local) run(cmd string, stdin io.Reader) (sh.Result, error) {
 }
 
 // Put implements target.Put
-func (l Local) Put(filename string, data []byte, perm os.FileMode) error {
+func (l *Local) Put(filename string, data []byte, perm os.FileMode) error {
 	if l.sudo() {
 		cmd := fmt.Sprintf("tee > %s", filename)
 		stdin := bytes.NewBuffer(data)
@@ -175,7 +174,7 @@ func (l Local) Put(filename string, data []byte, perm os.FileMode) error {
 }
 
 // Get implements target.Get
-func (l Local) Get(filename string) ([]byte, error) {
+func (l *Local) Get(filename string) ([]byte, error) {
 	if l.sudo() {
 		cmd := fmt.Sprintf("cat %s", filename)
 		res, err := l.runsudo(cmd, nil)

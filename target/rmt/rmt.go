@@ -15,7 +15,7 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
-// Package rmt contains functionality for Remote targets
+// Package rmt contains functionality for *Remote targets
 // A Remote target is a target that is connected to using SSH
 
 // Remote represents a Remote target, connected to over SSH
@@ -63,7 +63,7 @@ func New(addr string, user string, sudopass string, hostkeycallback ssh.HostKeyC
 }
 
 // Close closes all underlying connections
-func (r Remote) Close() error {
+func (r *Remote) Close() error {
 	for _, c := range r.sftp {
 		c.Close()
 	}
@@ -73,7 +73,7 @@ func (r Remote) Close() error {
 
 // sftpClient returns a sftp client for r.activeUser
 // if client does not exist, it will be created
-func (r Remote) sftpClient() (*sftp.Client, error) {
+func (r *Remote) sftpClient() (*sftp.Client, error) {
 	var c *sftp.Client
 	var err error
 	var ok bool
@@ -95,36 +95,36 @@ func (r Remote) sftpClient() (*sftp.Client, error) {
 }
 
 // sudo reports if operations must be done using sudo, i.e. if active user is not the connected user.
-func (r Remote) sudo() bool {
+func (r *Remote) sudo() bool {
 	return r.activeUser != r.connuser
 }
 
 // As returns a new Remote that will use the same underlying connections, but all operations will be done as user.
 //
 // No tests are done in this method. If user does not exist or does not have sudo rights, that will only be evident when trying to use methods on the returned object.
-func (r Remote) As(user string) Remote {
+func (r *Remote) As(user string) {
 	r.activeUser = user
-	return r
+	return
 }
 
 // User returns the connected user
-func (r Remote) User() string {
+func (r *Remote) User() string {
 	return r.connuser
 }
 
 // ActiveUser returns the currently active user
-func (r Remote) ActiveUser() string {
+func (r *Remote) ActiveUser() string {
 	return r.activeUser
 }
 
 // String implements fmt.Stringer
-func (r Remote) String() string {
+func (r *Remote) String() string {
 	return fmt.Sprintf("%s@%s", r.connuser, r.addr)
 }
 
 // Run executes cmd on Remote with the currently active user and returns the response.
 // Reader stdin is used to add stdin.
-func (r Remote) Run(cmd string, stdin io.Reader) (sh.Result, error) {
+func (r *Remote) Run(cmd string, stdin io.Reader) (sh.Result, error) {
 	if r.sudo() {
 		return r.runsudo(cmd, stdin)
 	}
@@ -132,7 +132,7 @@ func (r Remote) Run(cmd string, stdin io.Reader) (sh.Result, error) {
 }
 
 // run run cmd on remote
-func (r Remote) run(cmd string, stdin io.Reader) (sh.Result, error) {
+func (r *Remote) run(cmd string, stdin io.Reader) (sh.Result, error) {
 	session, err := r.conn.NewSession()
 	resp := sh.Result{}
 
@@ -166,7 +166,7 @@ func (r Remote) run(cmd string, stdin io.Reader) (sh.Result, error) {
 }
 
 // runsudo runs cmd on Remote as sudo / activeUser
-func (r Remote) runsudo(cmd string, stdin io.Reader) (sh.Result, error) {
+func (r *Remote) runsudo(cmd string, stdin io.Reader) (sh.Result, error) {
 
 	session, err := r.conn.NewSession()
 	resp := sh.Result{}
@@ -208,7 +208,7 @@ func (r Remote) runsudo(cmd string, stdin io.Reader) (sh.Result, error) {
 }
 
 // Put implements target.Put
-func (r Remote) Put(filename string, data []byte, perm os.FileMode) error {
+func (r *Remote) Put(filename string, data []byte, perm os.FileMode) error {
 	sftp, err := r.sftpClient()
 	if err != nil {
 		return errors.Wrap(err, "could not get sftp client")
@@ -240,7 +240,7 @@ func (r Remote) Put(filename string, data []byte, perm os.FileMode) error {
 }
 
 // Get retrieves the contents of the named
-func (r Remote) Get(filename string) ([]byte, error) {
+func (r *Remote) Get(filename string) ([]byte, error) {
 	sftp, err := r.sftpClient()
 	if err != nil {
 		return nil, errors.Wrap(err, "could not get sftp client")
