@@ -6,7 +6,6 @@ import (
 	"os"
 
 	"github.com/krilor/gossh"
-	"github.com/krilor/gossh/rmt"
 	"github.com/krilor/gossh/rules/x/apt"
 	"github.com/krilor/gossh/rules/x/base"
 	"github.com/krilor/gossh/rules/x/file"
@@ -24,16 +23,15 @@ func main() {
 	defer f.Close()
 	log.SetOutput(f)
 
-	inventory := gossh.Inventory{}
-
 	// Add a host to the inventory
 	// As of now, it's hardcoded to a docker container on localhost
-	m, err := rmt.New("localhost:2222", "gossh", "gosshpwd", ssh.InsecureIgnoreHostKey(), ssh.Password("gosshpwd"))
+	m, err := gossh.NewRemoteHost("localhost:2222", "gossh", "gosshpwd", ssh.InsecureIgnoreHostKey(), ssh.Password("gosshpwd"))
 	if err != nil {
 		fmt.Printf("could not get new host %v: %v\n", m, err)
 		return
 	}
 
+	inventory := gossh.Inventory{}
 	inventory.Add(m)
 
 	// TODO - add inventory from files, e.g.:
@@ -65,10 +63,10 @@ func main() {
 	filename := "somefile.txt"
 
 	bootstrap.Add(base.Meta{
-		EnsureFunc: func(t gossh.Target) (gossh.Status, error) {
+		EnsureFunc: func(h *gossh.Host) (gossh.Status, error) {
 
 			cmd := fmt.Sprintf("ls -1 /tmp | grep %s", filename)
-			r, err := t.RunCheck(cmd, "", "")
+			r, err := h.RunCheck(cmd, "", "")
 			if err != nil {
 				return gossh.StatusFailed, errors.Wrap(err, "could not check for somefile")
 			}

@@ -1,5 +1,5 @@
 docker-up :
-	cd testing; docker build -t gossh_ubuntu -f Dockerfile .
+	cd testing; docker build --no-cache -t gossh_ubuntu -f Dockerfile .
 	cd ..
 	docker run -d --name gossh_ubuntu -p 2222:22 gossh_ubuntu
 

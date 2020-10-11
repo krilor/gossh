@@ -24,12 +24,12 @@ func (i Info) Dir() bool {
 }
 
 // Stat returns stat info
-func Stat(t gossh.Target, abspath string, root bool) (Info, error) {
+func Stat(h *gossh.Host, abspath string, root bool) (Info, error) {
 	user := ""
 	if root {
 		user = "root"
 	}
-	_, err := t.RunCheck("stat "+abspath, "", user)
+	_, err := h.RunCheck("stat "+abspath, "", user)
 
 	if err != nil {
 		return Info{}, errors.Wrapf(err, "stat %s failed", abspath)

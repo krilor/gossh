@@ -1,5 +1,7 @@
 package gossh
 
+import "github.com/krilor/gossh/target"
+
 // Package gossh provides interfaces and functionality for declarative IT automation on target vms or containers.
 
 //go:generate stringer -type=Status
@@ -40,7 +42,7 @@ func (s Status) OK() bool {
 //
 // SuperTargets can be in a validate state, that does not allow for commands that RunChange the state of the system to run.
 type SuperTarget interface {
-	Target
+	target.Target
 
 	// Apply checks and ensures that the Target adheres to Rule r.
 	// String name should be unique within the immediate context, short and descriptive.
@@ -86,5 +88,5 @@ const BlockedByValidate int = 81549300
 //
 // If anything goes wrong, error err is returned. Otherwise err is nil.
 type Rule interface {
-	Ensure(t Target) (status Status, err error)
+	Ensure(h *Host) (status Status, err error)
 }

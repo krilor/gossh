@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/agent"
 )
 
 // Package rmt contains functionality for *Remote targets
@@ -36,7 +38,7 @@ type Remote struct {
 }
 
 // New returns a new Remote target from connection details
-func New(addr string, user string, sudopass string, hostkeycallback ssh.HostKeyCallback, auths ...ssh.AuthMethod) (Remote, error) {
+func New(addr string, user string, sudopass string, hostkeycallback ssh.HostKeyCallback, auths ...ssh.AuthMethod) (*Remote, error) {
 
 	r := Remote{
 		addr:       addr,
@@ -55,10 +57,10 @@ func New(addr string, user string, sudopass string, hostkeycallback ssh.HostKeyC
 	var err error
 	r.conn, err = ssh.Dial("tcp", addr, &cc)
 	if err != nil {
-		return r, errors.Wrapf(err, "unable to establish ssh connection to %s", addr)
+		return &r, errors.Wrapf(err, "unable to establish ssh connection to %s", addr)
 	}
 
-	return r, nil
+	return &r, nil
 
 }
 
@@ -298,4 +300,21 @@ func (r *Remote) scput(content io.Reader, size int64, path string, mode uint32) 
 	}
 
 	return nil
+}
+
+// AgentAuths is a helper function to get SSH keys from an ssh agent.
+// If any errors occur, an empty PublicKeys ssh.AuthMethod will be returned.
+func AgentAuths() ssh.AuthMethod {
+
+	socket := os.Getenv("SSH_AUTH_SOCK")
+	conn, err := net.Dial("unix", socket)
+	if err != nil {
+		return ssh.PublicKeys()
+	}
+	defer conn.Close()
+
+	agentClient := agent.NewClient(conn)
+
+	// TODO how do we close these clients?
+	return ssh.PublicKeysCallback(agentClient.Signers)
 }

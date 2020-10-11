@@ -1,5 +1,7 @@
 package target
 
+// Package target
+
 import (
 	"fmt"
 	"io"

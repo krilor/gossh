@@ -24,7 +24,7 @@ type Local struct {
 }
 
 // New returns a instance of Local
-func New(sudopass string) (Local, error) {
+func New(sudopass string) (*Local, error) {
 	l := Local{
 		sudopass: sudopass,
 	}
@@ -32,11 +32,11 @@ func New(sudopass string) (Local, error) {
 	buf, err := who.Output()
 
 	if err != nil {
-		return l, errors.Wrap(err, "could not identify user")
+		return &l, errors.Wrap(err, "could not identify user")
 	}
 	l.user = strings.Trim(string(buf), " \n")
 	l.activeUser = l.user
-	return l, nil
+	return &l, nil
 }
 
 // Close does nothing. It is just there to satisfy the gossh.Target interface.

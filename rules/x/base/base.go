@@ -17,9 +17,9 @@ type Cmd struct {
 }
 
 // Ensure simply runs Cmd's CheckCmd, then EnsureCmd
-func (c Cmd) Ensure(t gossh.Target) (gossh.Status, error) {
+func (c Cmd) Ensure(h *gossh.Host) (gossh.Status, error) {
 
-	r, err := t.RunCheck(c.CheckCmd, "", c.User)
+	r, err := h.RunCheck(c.CheckCmd, "", c.User)
 
 	if err != nil {
 		return gossh.StatusFailed, errors.Wrapf(err, "command %s failed", c.CheckCmd)
@@ -29,7 +29,7 @@ func (c Cmd) Ensure(t gossh.Target) (gossh.Status, error) {
 		return gossh.StatusSatisfied, nil
 	}
 
-	r, err = t.RunChange(c.EnsureCmd, "", c.User)
+	r, err = h.RunChange(c.EnsureCmd, "", c.User)
 
 	if err != nil || !r.Success() {
 		return gossh.StatusFailed, errors.Wrapf(err, "command %s failed", c.EnsureCmd)
@@ -40,16 +40,16 @@ func (c Cmd) Ensure(t gossh.Target) (gossh.Status, error) {
 
 // Meta is a rule that can be used to write your own rules, on the fly
 type Meta struct {
-	EnsureFunc func(t gossh.Target) (gossh.Status, error)
+	EnsureFunc func(h *gossh.Host) (gossh.Status, error)
 }
 
 // Ensure runs EnsureFunc
-func (ma Meta) Ensure(t gossh.Target) (gossh.Status, error) {
-	return ma.EnsureFunc(t)
+func (ma Meta) Ensure(h *gossh.Host) (gossh.Status, error) {
+	return ma.EnsureFunc(h)
 }
 
 // NewMeta can be used to create a new Meta rule
-func NewMeta(ensure func(t gossh.Target) (gossh.Status, error)) Meta {
+func NewMeta(ensure func(h *gossh.Host) (gossh.Status, error)) Meta {
 	return Meta{ensure}
 }
 
@@ -60,16 +60,16 @@ type Multi []gossh.Rule
 
 // Ensure implements Ensurer
 //
-// Ensure runs Check and Ensure on all rules in the list.
+// Ensure runs Check and Ensure on all rules in the lish.
 //
 // Multi will stop executing and return an error if encountering an error from any Check or Ensure method.
-func (p Multi) Ensure(t gossh.Target) (gossh.Status, error) {
+func (p Multi) Ensure(h *gossh.Host) (gossh.Status, error) {
 
 	var status gossh.Status
 
 	for i, r := range p {
 		name := fmt.Sprintf("multi%d - %v", i, r)
-		s, err := t.Apply(name, r)
+		s, err := h.Apply(name, r)
 		if s > status {
 			status = s
 		}
